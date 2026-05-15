@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+psycopg[binary]==3.2.3
+pydantic==2.10.4
+python-dateutil==2.9.0.post0
+PyYAML==6.0.2
+beautifulsoup4==4.12.3
+httpx==0.28.1
+feedparser==6.0.11
+curl_cffi==0.13.0
+twikit>=2.0.0
+instagrapi>=2.0.0
+playwright>=1.50.0
+pytest==8.3.4

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Japan Antiwar Intel Starter Feeds</title>
+    <dateCreated>Mon, 14 May 2026 00:00:00 +0900</dateCreated>
+  </head>
+  <body>
+    <outline text="日本通讯社/综合新闻" title="日本通讯社/综合新闻">
+      <outline type="rss" text="NHK News" title="NHK News" xmlUrl="https://www3.nhk.or.jp/rss/news/cat0.xml" htmlUrl="https://www3.nhk.or.jp/news/" />
+      <outline type="rss" text="Kyodo News" title="Kyodo News" xmlUrl="https://english.kyodonews.net/rss/news.xml" htmlUrl="https://english.kyodonews.net/" />
+      <outline type="rss" text="Asahi Shimbun" title="Asahi Shimbun" xmlUrl="https://www.asahi.com/rss/asahi/newsheadlines.rdf" htmlUrl="https://www.asahi.com/" />
+      <outline type="rss" text="Mainichi Shimbun" title="Mainichi Shimbun" xmlUrl="https://mainichi.jp/rss/etc/mainichi-flash.rss" htmlUrl="https://mainichi.jp/" />
+    </outline>
+    <outline text="日本政治/和平运动" title="日本政治/和平运动">
+      <outline type="rss" text="Google News - 日本 憲法9条" title="Google News - 日本 憲法9条" xmlUrl="https://news.google.com/rss/search?q=%E6%97%A5%E6%9C%AC%20%E6%86%B2%E6%B3%959%E6%9D%A1%20OR%20%E8%AD%B7%E6%86%B2%20OR%20%E6%94%B9%E6%86%B2&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - 日本 平和運動" title="Google News - 日本 平和運動" xmlUrl="https://news.google.com/rss/search?q=%E6%97%A5%E6%9C%AC%20%E5%B9%B3%E5%92%8C%E9%81%8B%E5%8B%95%20OR%20%E5%8F%8D%E6%88%A6&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - 沖縄 基地" title="Google News - 沖縄 基地" xmlUrl="https://news.google.com/rss/search?q=%E6%B2%96%E7%B8%84%20%E5%9F%BA%E5%9C%B0%20OR%20%E7%B1%B3%E8%BB%8D%20OR%20%E8%BB%8D%E4%BA%8B&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - 日本 安保法制 自衛隊" title="Google News - 日本 安保法制 自衛隊" xmlUrl="https://news.google.com/rss/search?q=%E6%97%A5%E6%9C%AC%20%E5%AE%89%E4%BF%9D%E6%B3%95%E5%88%B6%20OR%20%E8%87%AA%E8%A1%9B%E9%9A%8A%20OR%20%E9%9B%86%E5%9B%A3%E7%9A%84%E8%87%AA%E8%A1%9B%E6%A8%A9&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+    </outline>
+    <outline text="英文 Japan 相关" title="英文 Japan 相关">
+      <outline type="rss" text="Japan Times" title="Japan Times" xmlUrl="https://www.japantimes.co.jp/feed/" htmlUrl="https://www.japantimes.co.jp/" />
+      <outline type="rss" text="Google News - Japan anti-war" title="Google News - Japan anti-war" xmlUrl="https://news.google.com/rss/search?q=Japan%20(anti-war%20OR%20pacifist%20OR%20%22peace%20movement%22%20OR%20%22Article%209%22)&amp;hl=en-US&amp;gl=US&amp;ceid=US:en" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - Okinawa base US military" title="Google News - Okinawa base US military" xmlUrl="https://news.google.com/rss/search?q=Okinawa%20(base%20OR%20%22US%20military%22%20OR%20protest%20OR%20relocation)&amp;hl=en-US&amp;gl=US&amp;ceid=US:en" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - Japan defense budget security" title="Google News - Japan defense budget security" xmlUrl="https://news.google.com/rss/search?q=Japan%20(defense%20budget%20OR%20security%20policy%20OR%20%22US-Japan%20alliance%22)&amp;hl=en-US&amp;gl=US&amp;ceid=US:en" htmlUrl="https://news.google.com/" />
+    </outline>
+    <outline text="日本政府官方公开信息" title="日本政府官方公开信息">
+      <outline type="rss" text="Google News - site:kantei.go.jp" title="Google News - site:kantei.go.jp" xmlUrl="https://news.google.com/rss/search?q=site%3Akantei.go.jp&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://www.kantei.go.jp/" />
+      <outline type="rss" text="Google News - site:mofa.go.jp" title="Google News - site:mofa.go.jp" xmlUrl="https://news.google.com/rss/search?q=site%3Amofa.go.jp%20%E5%A4%96%E4%BA%A4%20OR%20%E5%AE%89%E5%85%A8%E4%BF%9D%E9%9A%9C&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://www.mofa.go.jp/" />
+      <outline type="rss" text="Google News - site:mod.go.jp" title="Google News - site:mod.go.jp" xmlUrl="https://news.google.com/rss/search?q=site%3Amod.go.jp%20%E9%98%B2%E8%A1%9B%20OR%20%E8%87%AA%E8%A1%9B%E9%9A%8A&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://www.mod.go.jp/" />
+    </outline>
+    <outline text="和平团体与市民运动" title="和平团体与市民运动">
+      <outline type="rss" text="Google News - 被団協 核廃絶" title="Google News - 被団協 核廃絶" xmlUrl="https://news.google.com/rss/search?q=%E8%A2%AB%E5%9B%A3%E5%8D%94%20OR%20%E6%A0%B8%E5%BB%83%E7%B5%B6%20OR%20%E6%A0%B8%E6%AD%A6%E5%99%A8%E7%A6%81%E6%AD%A2%E6%9D%A1%E7%B4%84&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - 市民運動 反戦 デモ" title="Google News - 市民運動 反戦 デモ" xmlUrl="https://news.google.com/rss/search?q=%E5%B8%82%E6%B0%91%E9%81%8B%E5%8B%95%20OR%20%E5%8F%8D%E6%88%A6%E3%83%87%E3%83%A2%20OR%20%E5%B9%B3%E5%92%8C%E5%9B%A3%E4%BD%93&amp;hl=ja&amp;gl=JP&amp;ceid=JP:ja" htmlUrl="https://news.google.com/" />
+    </outline>
+    <outline text="国际媒体对 Japan 的公开搜索源" title="国际媒体对 Japan 的公开搜索源">
+      <outline type="rss" text="Google News - Japan pacifism" title="Google News - Japan pacifism" xmlUrl="https://news.google.com/rss/search?q=Japan%20(pacifism%20OR%20remilitarization%20OR%20%22security%20bills%22)&amp;hl=en-US&amp;gl=US&amp;ceid=US:en" htmlUrl="https://news.google.com/" />
+      <outline type="rss" text="Google News - Japan peace constitution Reuters AP BBC" title="Google News - Japan peace constitution Reuters AP BBC" xmlUrl="https://news.google.com/rss/search?q=Japan%20(Reuters%20OR%20AP%20OR%20BBC)%20(%22peace%20constitution%22%20OR%20%22military%20bases%22%20OR%20%22defense%20spending%22)&amp;hl=en-US&amp;gl=US&amp;ceid=US:en" htmlUrl="https://news.google.com/" />
+    </outline>
+  </body>
+</opml>

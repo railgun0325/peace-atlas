@@ -1,0 +1,70 @@
+entities:
+  person:
+    - name: 賴清德
+      aliases: ["赖清德", "Lai Ching-te", "President Lai", "賴總統", "赖总统"]
+    - name: 蕭美琴
+      aliases: ["萧美琴", "Hsiao Bi-khim", "副總統蕭", "副总统萧"]
+    - name: 卓榮泰
+      aliases: ["卓荣泰", "Cho Jung-tai", "卓揆"]
+    - name: 韓國瑜
+      aliases: ["韩国瑜", "Han Kuo-yu"]
+    - name: 柯文哲
+      aliases: ["Ko Wen-je", "柯主席"]
+    - name: 黃國昌
+      aliases: ["黄国昌", "Huang Kuo-chang"]
+    - name: 朱立倫
+      aliases: ["朱立伦", "Eric Chu"]
+    - name: 鄭麗文
+      aliases: ["郑丽文", "Cheng Li-wun"]
+    - name: 林佳龍
+      aliases: ["林佳龙", "Lin Chia-lung"]
+    - name: 顧立雄
+      aliases: ["顾立雄", "Wellington Koo"]
+
+  party:
+    - name: 民进党
+      aliases: ["民主進步黨", "民進黨", "DPP", "Democratic Progressive Party"]
+    - name: 国民党
+      aliases: ["中國國民黨", "中国国民党", "國民黨", "KMT", "Kuomintang"]
+    - name: 民众党
+      aliases: ["台灣民眾黨", "台湾民众党", "民眾黨", "TPP", "Taiwan People's Party"]
+    - name: 时代力量
+      aliases: ["時代力量", "New Power Party", "NPP"]
+
+  institution:
+    - name: 总统府
+      aliases: ["總統府", "Office of the President"]
+    - name: 行政院
+      aliases: ["Executive Yuan", "政院"]
+    - name: 立法院
+      aliases: ["Legislative Yuan", "国会", "國會"]
+    - name: 国防部
+      aliases: ["國防部", "Ministry of National Defense", "MND"]
+    - name: 外交部
+      aliases: ["Ministry of Foreign Affairs", "MOFA"]
+    - name: 陆委会
+      aliases: ["大陸委員會", "大陆委员会", "Mainland Affairs Council", "MAC"]
+    - name: 司法院
+      aliases: ["Judicial Yuan"]
+    - name: 监察院
+      aliases: ["監察院", "Control Yuan"]
+    - name: 司法/检调
+      aliases: ["檢調", "检调", "地檢署", "地检署", "最高檢", "最高检", "法務部", "法务部"]
+    - name: 海基会
+      aliases: ["海基會", "SEF", "Straits Exchange Foundation"]
+
+  external_actor:
+    - name: 中国大陆
+      aliases: ["中國大陸", "大陆", "北京", "中共", "China", "PRC", "People's Republic of China"]
+    - name: 国台办
+      aliases: ["國台辦", "国务院台湾事务办公室", "Taiwan Affairs Office", "TAO"]
+    - name: 解放军
+      aliases: ["解放軍", "PLA", "People's Liberation Army", "共軍", "共军"]
+    - name: 美国
+      aliases: ["美國", "United States", "U.S.", "US", "Washington"]
+    - name: 日本
+      aliases: ["Japan", "東京", "Tokyo"]
+    - name: 欧盟
+      aliases: ["歐盟", "European Union", "EU"]
+    - name: AIT
+      aliases: ["American Institute in Taiwan", "美国在台协会", "美國在台協會"]

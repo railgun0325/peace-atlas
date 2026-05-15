@@ -1,0 +1,80 @@
+entities:
+  person:
+    - name: 岸田文雄
+      aliases: ["Kishida Fumio", "Prime Minister Kishida", "岸田首相", "Kishida"]
+    - name: 石破茂
+      aliases: ["Ishiba Shigeru", "石破", "Ishiba", "石破首相"]
+    - name: 高市早苗
+      aliases: ["Takaichi Sanae", "高市", "Takaichi"]
+    - name: 小池百合子
+      aliases: ["Koike Yuriko", "小池", "Koike", "小池都知事"]
+    - name: 玉木雄一郎
+      aliases: ["Tamaki Yuichiro", "玉木", "Tamaki"]
+    - name: 稲田朋美
+      aliases: ["Inada Tomomi", "稲田", "Inada"]
+    - name: 泉健太
+      aliases: ["Izumi Kenta", "泉", "Izumi"]
+    - name: 田母神俊雄
+      aliases: ["Temogami Toshio", "田母神", "Temogami"]
+
+  party:
+    - name: 自民党
+      aliases: ["自由民主党", "LDP", "Liberal Democratic Party", "Jiminto"]
+    - name: 立憲民主党
+      aliases: ["立民", "CDP", "Constitutional Democratic Party", "立憲", "Rikken"]
+    - name: 日本維新の会
+      aliases: ["維新", "Ishin", "Japan Innovation Party", "Nippon Ishin"]
+    - name: 公明党
+      aliases: ["Komeito", "公明", "New Komeito"]
+    - name: 共産党
+      aliases: ["日本共産党", "JCP", "Japanese Communist Party", "共産"]
+    - name: 国民民主党
+      aliases: ["国民", "DPP", "Democratic Party for the People", "Kokumin"]
+    - name: れいわ新選組
+      aliases: ["れいわ", "Reiwa Shinsengumi", "Reiwa"]
+    - name: 社民党
+      aliases: ["社会民主党", "SDP", "Social Democratic Party"]
+
+  organization:
+    - name: アムネスティ日本
+      aliases: ["Amnesty International Japan", "アムネスティ", "Amnesty Japan"]
+    - name: ピースボート
+      aliases: ["Peace Boat", "ピースボート"]
+    - name: 日本平和委員会
+      aliases: ["Japan Peace Committee", "平和委員会"]
+    - name: 原水爆禁止日本協議会
+      aliases: ["原水禁", "Gensuikin", "Japan Congress Against A- and H-Bombs"]
+    - name: 沖縄県平和運動センター
+      aliases: ["Okinawa Peace Movement Center", "沖縄平和運動センター"]
+    - name: 九条の会
+      aliases: ["Article 9 Association", "九条の会オーバーラップ"]
+
+  government:
+    - name: 防衛省
+      aliases: ["Ministry of Defense", "MOD", "防衛省・自衛隊", "Japan Ministry of Defense"]
+    - name: 外務省
+      aliases: ["Ministry of Foreign Affairs", "MOFA", "Japan MOFA", "Gaimusho"]
+    - name: 内閣府
+      aliases: ["Cabinet Office", "Naikakufu"]
+    - name: 沖縄県庁
+      aliases: ["Okinawa Prefectural Government", "沖縄県"]
+    - name: 国家安全保障局
+      aliases: ["NSS", "National Security Secretariat"]
+
+  international:
+    - name: 国際原子力機関
+      aliases: ["IAEA", "International Atomic Energy Agency"]
+    - name: 国連軍縮部
+      aliases: ["UNODA", "United Nations Office for Disarmament Affairs"]
+    - name: 国際平和研究所
+      aliases: ["SIPRI", "Stockholm International Peace Research Institute"]
+    - name: ICAN
+      aliases: ["International Campaign to Abolish Nuclear Weapons", "核兵器廃絶国際キャンペーン"]
+    - name: Human Rights Watch
+      aliases: ["HRW", "ヒューマン・ライツ・ウォッチ"]
+    - name: アメリカ国務省
+      aliases: ["US State Department", "State Department"]
+    - name: 中国政府
+      aliases: ["中国政府", "Chinese government", "北京"]
+    - name: ロシア政府
+      aliases: ["Russian government", "ロシア政府", "Moscow", "モスクワ"]

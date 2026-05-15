@@ -1,0 +1,162 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      TZ: ${TZ:-Asia/Tokyo}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - japan_antiwar_postgres_data:/var/lib/postgresql/data
+      - ./analysis-worker/sql/init.sql:/docker-entrypoint-initdb.d/10-analysis-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Tokyo}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?set N8N_ENCRYPTION_KEY in .env}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,postgres,n8n,freshrss,rsshub,redis,changedetection,qdrant,analysis-worker
+    ports:
+      - "5782:5678"
+    volumes:
+      - japan_antiwar_n8n_data:/home/node/.n8n
+
+  freshrss:
+    image: freshrss/freshrss:latest
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      CRON_MIN: "*/20"
+      HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,postgres,n8n,freshrss,rsshub,redis,changedetection,qdrant,analysis-worker
+    ports:
+      - "8181:80"
+    volumes:
+      - japan_antiwar_freshrss_data:/var/www/FreshRSS/data
+      - japan_antiwar_freshrss_extensions:/var/www/FreshRSS/extensions
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - japan_antiwar_redis_data:/data
+
+  rsshub:
+    image: diygod/rsshub:latest
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      CACHE_TYPE: redis
+      REDIS_URL: redis://redis:6379/
+      NODE_ENV: production
+      HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,postgres,n8n,freshrss,rsshub,redis,changedetection,qdrant,analysis-worker
+    ports:
+      - "1210:1200"
+
+  changedetection:
+    image: dgtlmoon/changedetection.io:latest
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,postgres,n8n,freshrss,rsshub,redis,changedetection,qdrant,analysis-worker
+    ports:
+      - "15100:5000"
+    volumes:
+      - japan_antiwar_changedetection_data:/datastore
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6433:6333"
+    volumes:
+      - japan_antiwar_qdrant_data:/qdrant/storage
+
+  analysis-worker:
+    build:
+      context: ./analysis-worker
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      TZ: ${TZ:-Asia/Tokyo}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-chat}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      REPORTS_DIR: /app/reports
+      PROMPT_PATH: /app/prompts/weekly_deep_analysis_prompt.md
+      HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      OUTBOUND_HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
+      NO_PROXY: localhost,127.0.0.1,::1,172.19.240.1,postgres,n8n,freshrss,rsshub,redis,changedetection,qdrant,analysis-worker
+      REDDIT_FETCH_COMMENTS: ${REDDIT_FETCH_COMMENTS:-false}
+      REDDIT_REQUEST_DELAY_SECONDS: ${REDDIT_REQUEST_DELAY_SECONDS:-2.5}
+      REDDIT_MAX_QUERY_TERMS: ${REDDIT_MAX_QUERY_TERMS:-15}
+      REDDIT_SUBREDDITS: ${REDDIT_SUBREDDITS:-japan,okinawa,japanlife,newsokur}
+      REDDIT_INCLUDE_OPTIONAL_SUBREDDITS: ${REDDIT_INCLUDE_OPTIONAL_SUBREDDITS:-false}
+      REDDIT_STOP_AFTER_FIRST_DEFAULT_HIT: ${REDDIT_STOP_AFTER_FIRST_DEFAULT_HIT:-true}
+      REDDIT_ACCEPT_DEFAULT_LATEST_FALLBACK: ${REDDIT_ACCEPT_DEFAULT_LATEST_FALLBACK:-true}
+      REDDIT_GLOBAL_SEARCH: ${REDDIT_GLOBAL_SEARCH:-false}
+    ports:
+      - "${ANALYSIS_WORKER_PORT:-8190}:8090"
+    volumes:
+      - ./analysis-worker/app:/app/app:ro
+      - ./analysis-worker/config:/app/config:ro
+      - ./reports:/app/reports
+      - ./prompts:/app/prompts:ro
+
+volumes:
+  japan_antiwar_postgres_data:
+  japan_antiwar_n8n_data:
+  japan_antiwar_freshrss_data:
+  japan_antiwar_freshrss_extensions:
+  japan_antiwar_redis_data:
+  japan_antiwar_changedetection_data:
+  japan_antiwar_qdrant_data:

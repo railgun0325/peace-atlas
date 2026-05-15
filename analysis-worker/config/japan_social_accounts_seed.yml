@@ -1,0 +1,323 @@
+accounts:
+  - platform: twitter
+    handle: "@peace_boat"
+    account_name: Peace Boat / ピースボート
+    organization: ピースボート
+    category: citizen_group
+    status: verified
+    url: https://x.com/peace_boat
+    language: ja
+    note: 国際NGOピースボート公式。反戦・平和教育・核廃絶関連の投稿多数。
+
+  - platform: twitter
+    handle: "@Article9_Japan"
+    account_name: 九条の会
+    organization: 九条の会
+    category: citizen_group
+    status: verified
+    url: https://x.com/Article9_Japan
+    language: ja
+    note: 憲法九条を守る全国市民団体ネットワーク。
+
+  - platform: twitter
+    handle: "@amnestyjapan"
+    account_name: アムネスティ・インターナショナル日本
+    organization: アムネスティ日本
+    category: ngo
+    status: verified
+    url: https://x.com/amnestyjapan
+    language: ja
+    note: 国際人権NGO日本支部。反戦・人権・沖縄関連投稿。
+
+  - platform: twitter
+    handle: "@HRWJapan"
+    account_name: Human Rights Watch 日本語
+    organization: Human Rights Watch
+    category: ngo
+    status: verified
+    url: https://x.com/HRWJapan
+    language: ja
+    note: ヒューマン・ライツ・ウォッチ日本向け公式。
+
+  - platform: twitter
+    handle: "@OkinawaPeace"
+    account_name: 沖縄平和運動センター
+    organization: 沖縄県平和運動センター
+    category: citizen_group
+    status: verified
+    url: https://x.com/OkinawaPeace
+    language: ja
+    note: 沖縄の基地問題・反戦運動の情報発信。
+
+  - platform: twitter
+    handle: "@CDP2017"
+    account_name: 立憲民主党 公式
+    organization: 立憲民主党
+    category: party
+    status: verified
+    url: https://x.com/CDP2017
+    language: ja
+    note: 立憲民主党公式。護憲・平和外交を主要政策に掲げる。
+
+  - platform: twitter
+    handle: "@JCPofficial"
+    account_name: 日本共産党 公式
+    organization: 共産党
+    category: party
+    status: verified
+    url: https://x.com/JCPofficial
+    language: ja
+    note: 日本共産党公式。反戦・反基地・護憲を掲げる。
+
+  - platform: twitter
+    handle: "@SDPJapan"
+    account_name: 社民党 公式
+    organization: 社民党
+    category: party
+    status: verified
+    url: https://x.com/SDPJapan
+    language: ja
+    note: 社会民主党公式。護憲平和・反戦が主要政策。
+
+  - platform: twitter
+    handle: "@komei_koho"
+    account_name: 公明党 公式
+    organization: 公明党
+    category: party
+    status: verified
+    url: https://x.com/komei_koho
+    language: ja
+    note: 公明党公式。平和主義・福祉重視を掲げる。
+
+  - platform: twitter
+    handle: "@reiwashinsen"
+    account_name: れいわ新選組 公式
+    organization: れいわ新選組
+    category: party
+    status: verified
+    url: https://x.com/reiwashinsen
+    language: ja
+    note: れいわ新選組公式。反戦・平和・脱原発を掲げる。
+
+  - platform: youtube
+    handle: "@PeaceBoat"
+    account_name: Peace Boat 公式YouTube
+    organization: ピースボート
+    category: citizen_group
+    status: verified
+    url: https://www.youtube.com/@PeaceBoat
+    language: ja
+    note: ピースボート公式YouTubeチャンネル。
+
+  - platform: youtube
+    handle: "@amnesty"
+    account_name: Amnesty International YouTube
+    organization: アムネスティ日本
+    category: ngo
+    status: verified
+    url: https://www.youtube.com/@amnesty
+    language: en
+    note: アムネスティ・インターナショナル公式YouTube。
+
+  - platform: youtube
+    handle: "@OkinawaTV"
+    account_name: 沖縄平和・基地問題関連チャンネル
+    organization: null
+    category: independent_media
+    status: seed
+    url: https://www.youtube.com/@OkinawaTV
+    language: ja
+    note: 沖縄関連平和・基地問題の動画チャンネル（要検証）。
+
+  - platform: youtube
+    handle: "@JCPTV"
+    account_name: 日本共産党 YouTube
+    organization: 共産党
+    category: party
+    status: verified
+    url: https://www.youtube.com/@JCPTV
+    language: ja
+    note: 日本共産党公式YouTube。
+
+  - platform: reddit
+    handle: "r/japanpolitics"
+    account_name: r/japanpolitics
+    organization: null
+    category: forum
+    status: seed
+    url: https://www.reddit.com/r/japanpolitics/
+    language: en
+    note: Redditの日本政治サブレディット。平和・安全保障関連の議論あり。
+
+  - platform: reddit
+    handle: "r/JapanPeace"
+    account_name: r/JapanPeace
+    organization: null
+    category: forum
+    status: seed
+    url: https://www.reddit.com/r/JapanPeace/
+    language: en
+    note: Redditの日本平和関連サブレディット。
+
+  - platform: rsshub
+    handle: "asahi/peace"
+    account_name: 朝日新聞 平和関連ルート
+    organization: 朝日新聞
+    category: media
+    status: seed
+    url: rsshub://asahi.com/peace
+    language: ja
+    note: RSSHubで取得する朝日新聞の平和・憲法関連記事。
+
+  - platform: rsshub
+    handle: "nhk/politics"
+    account_name: NHK政治ニュース ルート
+    organization: NHK
+    category: media
+    status: seed
+    url: rsshub://nhk.or.jp/politics
+    language: ja
+    note: RSSHubで取得するNHK政治ニュース。
+
+  - platform: rsshub
+    handle: "mainichi/politics"
+    account_name: 毎日新聞 政治ルート
+    organization: 毎日新聞
+    category: media
+    status: seed
+    url: rsshub://mainichi.jp/politics
+    language: ja
+    note: RSSHubで取得する毎日新聞政治関連記事。
+
+  - platform: rsshub
+    handle: "okinawatimes/news"
+    account_name: 沖縄タイムス ニュースルート
+    organization: 沖縄タイムス
+    category: media
+    status: seed
+    url: rsshub://okinawatimes.co.jp/news
+    language: ja
+    note: RSSHubで取得する沖縄タイムス。沖縄基地問題の主要情報源。
+
+  # ----- Mastodon / Fediverse 日本反戦アカウント -----
+  - platform: mastodon
+    handle: "PepperAdelaide@fedibird.com"
+    account_name: PepperAdelaide（反戦）
+    organization: null
+    category: citizen_group
+    status: seed
+    url: https://fedibird.com/@PepperAdelaide
+    language: ja
+    note: プロフィールに「戦争反対」を掲げるFedibirdユーザー。
+
+  - platform: mastodon
+    handle: "sentinel0079@fedibird.com"
+    account_name: sentinel0079（憲法9条）
+    organization: null
+    category: citizen_group
+    status: seed
+    url: https://fedibird.com/@sentinel0079
+    language: ja
+    note: 9条・反軍事法案・武器輸出反対の投稿を行うFedibirdユーザー。
+
+  - platform: mastodon
+    handle: "Dai7707@fedibird.com"
+    account_name: Dai7707（反戦政治）
+    organization: null
+    category: citizen_group
+    status: seed
+    url: https://fedibird.com/@Dai7707
+    language: ja
+    note: 反戦立場の政治コンテンツを投稿するFedibirdユーザー。
+
+  # ----- Instagram 日本平和団体 -----
+  - platform: instagram
+    handle: "peace_boat"
+    account_name: Peace Boat Instagram
+    organization: ピースボート
+    category: citizen_group
+    status: seed
+    url: https://www.instagram.com/peace_boat/
+    language: ja
+    note: ピースボート公式Instagram。反戦・平和教育・船旅の写真。
+
+  - platform: instagram
+    handle: "amnestyjapan"
+    account_name: アムネスティ日本 Instagram
+    organization: アムネスティ日本
+    category: ngo
+    status: seed
+    url: https://www.instagram.com/amnestyjapan/
+    language: ja
+    note: アムネスティ・インターナショナル日本支部Instagram。
+
+  # ----- Twitter/X 追加反戦アカウント -----
+  - platform: twitter
+    handle: "@HiroshimaPeace"
+    account_name: 広島平和文化センター
+    organization: 広島平和文化センター
+    category: citizen_group
+    status: seed
+    url: https://x.com/HiroshimaPeace
+    language: ja
+    note: 広島の平和記念資料館・平和公園を管理する財団法人。
+
+  - platform: twitter
+    handle: "@NagasakiPeace"
+    account_name: 長崎平和推進協会
+    organization: 長崎平和推進協会
+    category: citizen_group
+    status: seed
+    url: https://x.com/NagasakiPeace
+    language: ja
+    note: 長崎原爆資料館・平和公園関連の公式アカウント。
+
+  - platform: twitter
+    handle: "@nuclearban"
+    account_name: ICAN Japan
+    organization: ICAN（核兵器廃絶国際キャンペーン）
+    category: ngo
+    status: seed
+    url: https://x.com/nuclearban
+    language: ja
+    note: 核兵器禁止条約（TPNW）推進NGOの日本関連アカウント。
+
+  - platform: twitter
+    handle: "@peace_depot"
+    account_name: Peace Depot
+    organization: ピースデポ
+    category: ngo
+    status: seed
+    url: https://x.com/peace_depot
+    language: ja
+    note: 横浜の平和研究NGO。核軍縮・安全保障分析。
+
+  - platform: twitter
+    handle: "@save_article9"
+    account_name: 憲法9条を守る市民の会
+    organization: 憲法9条を守る市民連合
+    category: citizen_group
+    status: seed
+    url: https://x.com/save_article9
+    language: ja
+    note: 憲法九条改定反対の市民運動アカウント。
+
+  - platform: twitter
+    handle: "@tansa_news"
+    account_name: Tansa（旧Waseda Chronicle）
+    organization: Tansa
+    category: independent_media
+    status: seed
+    url: https://x.com/tansa_news
+    language: ja
+    note: 調査報道NPO。安全保障・沖縄・防衛関連の深掘り報道。
+
+  - platform: twitter
+    handle: "@asahi_seiron"
+    account_name: 朝日新聞 平和・憲法
+    organization: 朝日新聞
+    category: media
+    status: seed
+    url: https://x.com/asahi_seiron
+    language: ja
+    note: 朝日新聞の平和・憲法問題関連アカウント。

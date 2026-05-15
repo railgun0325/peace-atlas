@@ -1,0 +1,19 @@
+.env
+reports/*.md
+!reports/.gitkeep
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Instagram browser profile & sessions
+data/instagram_session.json
+data/ig_browser_profile/
+data/*.log
+
+# OS
+.DS_Store
+Thumbs.db

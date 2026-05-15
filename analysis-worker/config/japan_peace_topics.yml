@@ -1,0 +1,205 @@
+topics:
+  - name: 宪法九条/平和主義
+    min_score: 1
+    keywords:
+      - "憲法九条"
+      - "宪法九条"
+      - "Article 9"
+      - "平和憲法"
+      - "peace constitution"
+      - "改憲"
+      - "constitutional revision"
+      - "護憲"
+      - "protect constitution"
+      - "憲法改正"
+      - "九条の会"
+      - "Article 9 Association"
+      - "戦争放棄"
+      - "renunciation of war"
+
+  - name: 米軍基地/沖縄
+    min_score: 1
+    keywords:
+      - "沖縄"
+      - "Okinawa"
+      - "米軍基地"
+      - "US base"
+      - "US military base"
+      - "普天間"
+      - "Futenma"
+      - "辺野古"
+      - "Henoko"
+      - "海兵隊"
+      - "Marine Corps"
+      - "基地負担"
+      - "base burden"
+      - "嘉手納"
+      - "Kadena"
+      - "オスプレイ"
+      - "Osprey"
+
+  - name: 反戦運動/市民団体
+    min_score: 1
+    keywords:
+      - "反戦"
+      - "anti-war"
+      - "antiwar"
+      - "平和運動"
+      - "peace movement"
+      - "市民団体"
+      - "citizen group"
+      - "平和デモ"
+      - "peace demo"
+      - "戦争反対"
+      - "no war"
+      - "反基地"
+      - "anti-base"
+      - "市民連合"
+      - "civil alliance"
+      - "平和行進"
+      - "peace march"
+
+  - name: 自衛隊/軍事政策
+    min_score: 1
+    keywords:
+      - "自衛隊"
+      - "SDF"
+      - "Self-Defense Forces"
+      - "防衛費"
+      - "defense budget"
+      - "防衛増税"
+      - "defense tax"
+      - "敵基地攻撃能力"
+      - "counterstrike capability"
+      - "安保三文書"
+      - "three security documents"
+      - "軍拡"
+      - "military expansion"
+      - "防衛装備"
+      - "defense equipment"
+      - "集団的自衛権"
+      - "collective self-defense"
+
+  - name: 核兵器廃絶/被爆
+    min_score: 1
+    keywords:
+      - "核兵器"
+      - "nuclear weapons"
+      - "核廃絶"
+      - "nuclear abolition"
+      - "被爆"
+      - "hibakusha"
+      - "広島"
+      - "Hiroshima"
+      - "長崎"
+      - "Nagasaki"
+      - "核禁止条約"
+      - "TPNW"
+      - "NPT"
+      - "核の傘"
+      - "nuclear umbrella"
+      - "非核三原則"
+      - "three non-nuclear principles"
+      - "核共有"
+      - "nuclear sharing"
+
+  - name: 日米同盟/安保
+    min_score: 1
+    keywords:
+      - "日米同盟"
+      - "US-Japan alliance"
+      - "日米安保"
+      - "Japan-US security"
+      - "安保条約"
+      - "security treaty"
+      - "地位協定"
+      - "SOFA"
+      - "同盟強化"
+      - "alliance strengthen"
+      - "在日米軍"
+      - "US Forces Japan"
+      - "日米ガイドライン"
+      - "defense guidelines"
+
+  - name: 近隣外交/東アジア
+    min_score: 1
+    keywords:
+      - "日中関係"
+      - "Japan-China relations"
+      - "日韓関係"
+      - "Japan-Korea relations"
+      - "台湾海峡"
+      - "Taiwan Strait"
+      - "台湾有事"
+      - "Taiwan contingency"
+      - "尖閣"
+      - "Senkaku"
+      - "釣魚島"
+      - "Diaoyu"
+      - "北朝鮮"
+      - "North Korea"
+      - "ミサイル"
+      - "missile"
+      - "拉致"
+      - "abduction"
+
+  - name: 平和教育/歴史認識
+    min_score: 1
+    keywords:
+      - "平和教育"
+      - "peace education"
+      - "歴史認識"
+      - "historical recognition"
+      - "教科書"
+      - "textbook"
+      - "戦争責任"
+      - "war responsibility"
+      - "靖国"
+      - "Yasukuni"
+      - "従軍慰安婦"
+      - "comfort women"
+      - "植民地"
+      - "colonial"
+      - "歴史修正"
+      - "historical revisionism"
+      - "南京"
+      - "Nanjing"
+
+  - name: 難民/人道/国際貢献
+    min_score: 1
+    keywords:
+      - "難民"
+      - "refugee"
+      - "人道支援"
+      - "humanitarian"
+      - "PKO"
+      - "peacekeeping"
+      - "ODA"
+      - "開発援助"
+      - "国際貢献"
+      - "international contribution"
+      - "避難民"
+      - "displaced"
+      - "ガザ"
+      - "Gaza"
+      - "ウクライナ"
+      - "Ukraine"
+
+  - name: メディア/言論
+    min_score: 1
+    keywords:
+      - "報道の自由"
+      - "press freedom"
+      - "放送法"
+      - "broadcasting law"
+      - "NHK"
+      - "公共放送"
+      - "public broadcasting"
+      - "言論統制"
+      - "media control"
+      - "記者クラブ"
+      - "kisha club"
+      - "特定秘密保護法"
+      - "state secrecy law"
+      - "安保法案"
+      - "security legislation"
