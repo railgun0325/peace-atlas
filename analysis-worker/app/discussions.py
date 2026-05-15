@@ -18,77 +18,53 @@ from .db import fetch_all, fetch_one, get_conn
 from .sentiment import classify_sentiment, sentiment_profile_from_counts, summarize_sentiments
 
 
-PTT_BOARDS = ["HatePolitics", "PublicIssue", "Military"]
-REDDIT_SUBREDDITS = ["taiwan"]
-REDDIT_OPTIONAL_SUBREDDITS = ["Taiwanese", "China", "geopolitics"]
-DCARD_FORUMS = ["trending"]
-DCARD_RSSHUB_TYPES = ["popular", "latest"]
-DEFAULT_DISCUSSION_KEYWORDS = ["台灣 政治", "台湾 政治", "Taiwan politics", "Taiwan Strait", "台海 國防", "立法院 預算"]
+REDDIT_SUBREDDITS = ["japan", "okinawa", "japanlife", "newsokur"]
+REDDIT_OPTIONAL_SUBREDDITS = ["japanpolitics", "JapanPeace", "worldnews", "geopolitics"]
+DEFAULT_DISCUSSION_KEYWORDS = ["憲法九条 平和", "沖縄 米軍基地", "反戦 市民運動", "Japan peace movement", "Japan antiwar", "Okinawa US base"]
 REDDIT_DEFAULT_QUERIES = [
-    "Taiwan politics",
-    "Taiwan Strait",
-    "Taiwan defense",
-    "Taiwan election",
-    "Taiwan diplomacy",
-    "cross-strait",
-    "DPP Taiwan",
-    "KMT Taiwan",
-    "Taiwan semiconductor",
-    "TSMC",
-    "Taiwan China",
-    "Taiwan military",
-    "Taiwan democracy",
-    "Taiwan news",
-    "Taiwan president",
-    "台海",
-    "台灣海峽",
-    "立法院",
-    "國防預算",
-    "台湾防衛",
-    "台湾政治",
-    "台湾有事",
-    "台湾海峡",
-    "米台関係",
-    "台湾民主",
-    "台湾情勢",
-    "日台関係",
+    "Japan peace movement",
+    "Japan antiwar",
+    "Okinawa US base",
+    "Futenma",
+    "Henoko",
+    "Article 9 Japan",
+    "Japan pacifism",
+    "Japan defense policy",
+    "Japan nuclear disarmament",
+    "Japan hibakusha",
+    "Japan US alliance",
+    "Japan security treaty",
+    "Japan peace education",
+    "Japan war memory",
+    "憲法九条",
+    "沖縄基地",
+    "安保法制",
+    "反戦運動",
+    "平和運動",
+    "日米同盟",
+    "原水爆禁止",
+    "自衛隊派遣",
+    "平和憲法",
 ]
 REDDIT_QUERY_TRANSLATIONS = {
-    "台灣政治": ["Taiwan politics"],
-    "台湾政治": ["Taiwan politics"],
-    "台灣 政治": ["Taiwan politics"],
-    "台湾 政治": ["Taiwan politics"],
-    "台海": ["Taiwan Strait"],
-    "台灣海峽": ["Taiwan Strait"],
-    "台湾海峡": ["Taiwan Strait"],
-    "兩岸": ["cross-strait", "Taiwan Strait"],
-    "两岸": ["cross-strait", "Taiwan Strait"],
-    "國防": ["Taiwan defense"],
-    "国防": ["Taiwan defense"],
-    "國防預算": ["Taiwan defense budget"],
-    "国防预算": ["Taiwan defense budget"],
-    "軍購": ["Taiwan arms purchase"],
-    "军购": ["Taiwan arms purchase"],
-    "外交": ["Taiwan diplomacy"],
-    "選舉": ["Taiwan election"],
-    "选举": ["Taiwan election"],
-    "民調": ["Taiwan poll"],
-    "民调": ["Taiwan poll"],
-    "民進黨": ["DPP Taiwan"],
-    "民进党": ["DPP Taiwan"],
-    "國民黨": ["KMT Taiwan"],
-    "国民党": ["KMT Taiwan"],
-    "民眾黨": ["TPP Taiwan"],
-    "民众党": ["TPP Taiwan"],
-    "台湾政治": ["Taiwan politics"],
-    "台湾海峡": ["Taiwan Strait"],
-    "台湾防衛": ["Taiwan defense"],
-    "台湾選挙": ["Taiwan election"],
-    "台湾外交": ["Taiwan diplomacy"],
-    "日台関係": ["Japan Taiwan relations"],
-    "米台関係": ["US Taiwan relations"],
+    "憲法九条": ["Article 9 Japan"],
+    "平和憲法": ["Japan peace constitution"],
+    "沖縄基地": ["Okinawa US base", "Okinawa military"],
+    "反戦運動": ["Japan antiwar"],
+    "平和運動": ["Japan peace movement"],
+    "安保法制": ["Japan security laws"],
+    "日米同盟": ["Japan US alliance"],
+    "防衛費": ["Japan defense spending"],
+    "自衛隊": ["Japan Self-Defense Forces"],
+    "被爆者": ["hibakusha", "Japan atomic bomb survivors"],
+    "核廃絶": ["Japan nuclear abolition"],
+    "尖閣諸島": ["Senkaku Islands"],
+    "北朝鮮": ["North Korea", "DPRK"],
+    "米軍基地": ["US military base", "Okinawa base"],
+    "辺野古": ["Henoko"],
+    "普天間": ["Futenma"],
 }
-USER_AGENT = "taiwan-politics-intel/0.1 public-source research"
+USER_AGENT = "japan-antiwar-intel/0.2 public-source research"
 PUBLIC_BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -96,7 +72,7 @@ PUBLIC_BROWSER_HEADERS = {
         "Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json,application/rss+xml,application/xml,text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,zh;q=0.7",
     "Accept-Encoding": "gzip, deflate, br",
     "Cache-Control": "no-cache",
     "Pragma": "no-cache",
@@ -112,51 +88,49 @@ REDDIT_HEADERS = {
     **PUBLIC_BROWSER_HEADERS,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
 }
-DEFAULT_DISCUSSION_KEYWORDS = ["台灣 政治", "台湾 政治", "Taiwan politics", "Taiwan Strait", "台海 國防", "立法院 預算"]
-TAIWAN_ANCHOR_TERMS = [
-    "taiwan",
-    "taiwanese",
-    "taiwan strait",
-    "cross-strait",
-    "台灣",
-    "台湾",
-    "台海",
-    "兩岸",
-    "两岸",
-    "民進黨",
-    "民进党",
-    "dpp",
-    "國民黨",
-    "国民党",
-    "kmt",
-    "民眾黨",
-    "民众党",
-    "tpp",
-    "立法院",
-    "總統府",
-    "总统府",
-    "行政院",
-    "陸委會",
-    "陆委会",
-    "賴清德",
-    "赖清德",
-    "柯文哲",
-    "黃國昌",
-    "黄国昌",
-    "朱立倫",
-    "朱立伦",
-    "罷免",
-    "罢免",
-    "大罷免",
-    "大罢免",
+DEFAULT_DISCUSSION_KEYWORDS = ["憲法九条 平和", "沖縄 米軍基地", "反戦 市民運動", "Japan peace movement", "Japan antiwar", "Okinawa US base"]
+JAPAN_ANCHOR_TERMS = [
+    "japan",
+    "japanese",
+    "okinawa",
+    "沖縄",
+    "憲法九条",
+    "憲法9条",
+    "article 9",
+    "平和",
+    "peace",
+    "反戦",
+    "antiwar",
+    "pacifism",
+    "自衛隊",
+    "self-defense",
+    "米軍基地",
+    "us base",
+    "military base",
+    "安保",
+    "security treaty",
+    "日米同盟",
+    "alliance",
+    "被爆",
+    "hibakusha",
+    "核廃絶",
+    "nuclear disarmament",
+    "辺野古",
+    "henoko",
+    "普天間",
+    "futenma",
+    "平和運動",
+    "peace movement",
+    "市民団体",
+    "ngo",
 ]
 KEYWORD_STOPWORDS = {
     "and",
     "or",
     "the",
     "with",
-    "taiwan",
-    "taiwanese",
+    "japan",
+    "japanese",
     "politics",
     "political",
     "government",
@@ -174,106 +148,73 @@ async def emit_discussion_progress(
         await progress(event)
 
 DEFAULT_DISCUSSION_KEYWORDS = [
-    "台灣政治",
-    "台湾政治",
-    "台灣 政治",
-    "台湾 政治",
-    "台海",
-    "台灣海峽",
-    "台湾海峡",
-    "Taiwan Strait",
-    "cross-strait",
-    "兩岸關係",
-    "两岸关系",
-    "陸委會",
-    "陆委会",
-    "國台辦",
-    "国台办",
-    "賴清德",
-    "赖清德",
-    "總統府",
-    "总统府",
-    "行政院",
-    "立法院",
-    "國防部",
-    "国防部",
-    "國防預算",
-    "国防预算",
-    "軍購",
-    "军购",
-    "解放軍 台灣",
-    "解放军 台湾",
-    "PLA Taiwan",
-    "ADIZ Taiwan",
-    "Taiwan defense",
-    "Taiwan military",
-    "Taiwan election",
-    "Taiwan poll",
-    "民進黨",
-    "民进党",
-    "DPP Taiwan",
-    "國民黨",
-    "国民党",
-    "KMT Taiwan",
-    "民眾黨",
-    "民众党",
-    "TPP Taiwan",
-    "柯文哲",
-    "黃國昌",
-    "黄国昌",
-    "罷免",
-    "罢免",
-    "大罷免",
-    "大罢免",
-    "台積電 政策",
-    "台积电 政策",
-    "Taiwan diplomacy",
-    "Taiwan US",
-    "Taiwan Japan",
-    "World Health Assembly Taiwan",
-    "WHA Taiwan",
+    "憲法九条",
+    "平和憲法",
+    "沖縄 基地",
+    "反戦運動",
+    "平和運動",
+    "安保法制",
+    "日米同盟",
+    "Japan peace movement",
+    "Japan antiwar",
+    "Okinawa US base",
+    "Futenma",
+    "Henoko",
+    "Article 9 Japan",
+    "Japan pacifism",
+    "Japan defense policy",
+    "Japan nuclear disarmament",
+    "Japan hibakusha",
+    "Japan US alliance",
+    "Japan security treaty",
+    "Japan peace education",
+    "Japan war memory",
+    "自衛隊 派遣",
+    "防衛費 増額",
+    "核廃絶 運動",
+    "被爆者 証言",
+    "尖閣 諸島",
+    "北朝鮮 ミサイル",
+    "米軍 再編",
+    "市民 抗議",
+    "国会 決議",
+    "NGO peace Japan",
 ]
 
-TAIWAN_ANCHOR_TERMS = [
-    "taiwan",
-    "taiwanese",
-    "taiwan strait",
-    "cross-strait",
-    "台灣",
-    "台湾",
-    "台海",
-    "台灣海峽",
-    "台湾海峡",
-    "兩岸",
-    "两岸",
-    "民進黨",
-    "民进党",
-    "dpp",
-    "國民黨",
-    "国民党",
-    "kmt",
-    "民眾黨",
-    "民众党",
-    "tpp",
-    "立法院",
-    "總統府",
-    "总统府",
-    "行政院",
-    "國防部",
-    "国防部",
-    "陸委會",
-    "陆委会",
-    "國台辦",
-    "国台办",
-    "賴清德",
-    "赖清德",
-    "柯文哲",
-    "黃國昌",
-    "黄国昌",
-    "罷免",
-    "罢免",
-    "大罷免",
-    "大罢免",
+JAPAN_ANCHOR_TERMS = [
+    "japan",
+    "japanese",
+    "okinawa",
+    "沖縄",
+    "憲法九条",
+    "憲法9条",
+    "article 9",
+    "平和",
+    "peace",
+    "反戦",
+    "antiwar",
+    "pacifism",
+    "自衛隊",
+    "self-defense",
+    "米軍基地",
+    "us base",
+    "military base",
+    "安保",
+    "security treaty",
+    "日米同盟",
+    "alliance",
+    "被爆",
+    "hibakusha",
+    "核廃絶",
+    "nuclear disarmament",
+    "辺野古",
+    "henoko",
+    "普天間",
+    "futenma",
+    "平和運動",
+    "peace movement",
+    "市民団体",
+    "ngo",
 ]
 
 
@@ -296,7 +237,7 @@ def content_hash(*parts: str | None) -> str:
 
 def discussion_relevant(post: dict[str, Any], keywords: list[str] | None = None) -> bool:
     haystack = f"{post.get('title', '')}\n{post.get('raw_text', '')}".lower()
-    if any(term.lower() in haystack for term in TAIWAN_ANCHOR_TERMS):
+    if any(term.lower() in haystack for term in JAPAN_ANCHOR_TERMS):
         return True
     tokens: list[str] = []
     for keyword in keywords or []:
@@ -355,7 +296,6 @@ async def async_retry_with_backoff(fn, max_retries: int = 3, base_delay: float =
 
 
 REDDIT_TIMEOUT = httpx.Timeout(30.0, connect=10.0, read=30.0, write=10.0)
-DCARD_TIMEOUT = httpx.Timeout(30.0, connect=10.0, read=30.0, write=10.0)
 
 
 def ensure_discussion_tables() -> None:
@@ -676,41 +616,6 @@ def ptt_vote_score(value: str) -> int:
     return 0
 
 
-async def fetch_ptt_discussions(start_date: date, end_date: date, max_posts: int, max_comments: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    diagnostics = []
-    collected = []
-    async with httpx.AsyncClient(timeout=12, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        for board in PTT_BOARDS:
-            try:
-                response = await client.get(f"https://www.ptt.cc/bbs/{board}/index.html")
-                diagnostic = {"platform": "ptt", "board": board, "status_code": response.status_code, "ok": False, "post_count": 0}
-                response.raise_for_status()
-                index_posts = parse_ptt_index(response.text, board)
-                if not index_posts and "over18" in response.text.lower():
-                    diagnostic["message"] = "Board requires age/login confirmation; skipped."
-                    diagnostics.append(diagnostic)
-                    continue
-                board_count = 0
-                for item in index_posts:
-                    if board_count >= max_posts:
-                        break
-                    article = await client.get(item["url"])
-                    article.raise_for_status()
-                    post, comments = parse_ptt_article(article.text, item["url"], board, item["title"])
-                    if not discussion_relevant(post, DEFAULT_DISCUSSION_KEYWORDS):
-                        continue
-                    if not in_date_range(post.get("published_at"), start_date, end_date):
-                        continue
-                    collected.append({"post": post, "comments": comments[:max_comments]})
-                    board_count += 1
-                diagnostic["ok"] = True
-                diagnostic["post_count"] = board_count
-                diagnostics.append(diagnostic)
-            except Exception as exc:
-                diagnostics.append({"platform": "ptt", "board": board, "ok": False, "message": str(exc), "post_count": 0})
-    return collected, diagnostics
-
-
 def parse_old_reddit_search_html(html: str, subreddit: str) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
     posts = []
@@ -1012,7 +917,7 @@ async def fetch_reddit_via_old_new(
         post for post in parse_reddit_new_html(response.text, subreddit)
         if in_date_range(post.get("published_at"), start_date, end_date)
     ]
-    allow_broad = os.getenv("REDDIT_ACCEPT_TAIWAN_LATEST_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
+    allow_broad = os.getenv("REDDIT_ACCEPT_JAPAN_LATEST_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
     if not allow_broad:
         posts = [p for p in posts if discussion_relevant(p, REDDIT_DEFAULT_QUERIES)]
     posts = posts[:max_posts]
@@ -1219,15 +1124,15 @@ def filter_reddit_fallback_posts(
     end_date: date,
     max_posts: int,
 ) -> list[dict[str, Any]]:
-    allow_broad_taiwan_fallback = (
-        subreddit.lower() == "taiwan"
-        and os.getenv("REDDIT_ACCEPT_TAIWAN_LATEST_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
+    allow_broad_japan_fallback = (
+        subreddit.lower() in ("japan", "okinawa")
+        and os.getenv("REDDIT_ACCEPT_JAPAN_LATEST_FALLBACK", "true").strip().lower() in {"1", "true", "yes", "on"}
     )
     return [
         post
         for post in posts
         if in_date_range(post.get("published_at"), start_date, end_date)
-        and (allow_broad_taiwan_fallback or discussion_relevant(post, REDDIT_DEFAULT_QUERIES))
+        and (allow_broad_japan_fallback or discussion_relevant(post, REDDIT_DEFAULT_QUERIES))
     ][:max_posts]
 
 
@@ -1606,7 +1511,7 @@ async def fetch_reddit_discussions(
                         "message": str(exc),
                         "found_so_far": len(collected_by_url),
                     })
-            if not collected_by_url and subreddit == "taiwan":
+            if not collected_by_url and subreddit in ("japan", "okinawa"):
                 try:
                     await emit_discussion_progress(progress, {
                         "type": "progress",
@@ -2402,12 +2307,8 @@ async def fetch_discussions_by_platform(
     max_comments: int,
     progress: DiscussionProgressCallback | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    if platform == "ptt":
-        return await fetch_ptt_discussions(start_date, end_date, max_posts, max_comments)
     if platform == "reddit":
         return await fetch_reddit_discussions(start_date, end_date, keywords, max_posts, max_comments, progress)
-    if platform == "dcard":
-        return await fetch_dcard_discussions(start_date, end_date, max_posts, max_comments, keywords, progress)
     if platform == "discord":
         return [], [
             {

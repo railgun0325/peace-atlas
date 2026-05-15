@@ -13,6 +13,7 @@ __pycache__/
 data/instagram_session.json
 data/ig_browser_profile/
 data/*.log
+analysis-worker/data/
 
 # OS
 .DS_Store

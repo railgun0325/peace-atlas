@@ -270,14 +270,14 @@ async def fetch_x_public_diagnostic(handle: str) -> dict[str, Any]:
 
 
 async def fetch_instagram_public_diagnostic(handle: str) -> dict[str, Any]:
-    """Instagram is available via Instagrapi with login credentials."""
+    """Instagram private API path is disabled by default (legacy/manual-risk)."""
     return {
         "platform": "instagram",
         "handle": handle,
-        "ok": True,
-        "available": True,
-        "message": "Instagram scraping available via instagrapi (login required, credentials from INSTAGRAM_USERNAME/INSTAGRAM_PASSWORD env vars).",
-        "detail": "Uses instagrapi private API wrapper with proxy support, session persistence, and rate-limit delays.",
+        "ok": False,
+        "available": False,
+        "message": "Instagram private API (instagrapi) is disabled by default due to account risk.",
+        "detail": "Default path is low-frequency Playwright with persisted login state. Legacy private API requires IG_ALLOW_LEGACY_INSTAGRAPI=1 and is manual-risk.",
     }
 
 
@@ -548,6 +548,9 @@ async def _ensure_ig_client():
     asyncio event loop. Session is cached to data/instagram_session.json.
     """
     global _ig_client, _ig_available
+    if _os.environ.get("IG_ALLOW_LEGACY_INSTAGRAPI", "0") != "1":
+        _ig_available = False
+        return None, "instagrapi disabled (legacy/manual-risk); set IG_ALLOW_LEGACY_INSTAGRAPI=1 to override"
 
     if _ig_available is False:
         return None, "instagrapi unavailable (previous init failed)"
@@ -874,7 +877,7 @@ async def fetch_twitter_profile_fxtwitter(
         return None
 
 
-async def fetch_twitter_timeline(
+async def _fetch_twitter_timeline_legacy(
     handle: str,
     start_date: date,
     end_date: date,
@@ -1028,6 +1031,181 @@ async def _try_xcancel_timeline(
     return result
 
 
+def _normalize_twitter_handle(handle: str) -> str:
+    text = str(handle or "").strip()
+    if not text:
+        return ""
+    parsed = urlparse(text if "://" in text else f"https://x.com/{text.lstrip('@')}")
+    if parsed.netloc:
+        candidate = parsed.path.strip("/").split("/", 1)[0]
+        if candidate and candidate.lower() not in {"home", "search", "i", "intent"}:
+            text = candidate
+    return text.strip().lstrip("@")
+
+
+def _split_instance_env(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    if not raw.strip():
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in _re.split(r"[,\s]+", raw.strip()):
+        item = value.strip().rstrip("/")
+        if not item.startswith("http"):
+            continue
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def _get_nitter_instances() -> list[str]:
+    primary = _split_instance_env("NITTER_INSTANCES") or list(NITTER_INSTANCES)
+    fallback = _split_instance_env("NITTER_FALLBACK_INSTANCES") or list(NITTER_FALLBACK_INSTANCES)
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in primary + fallback:
+        norm = item.rstrip("/")
+        if norm and norm not in seen:
+            seen.add(norm)
+            result.append(norm)
+    return result
+
+
+def _validate_nitter_rss_response(resp: httpx.Response) -> dict[str, Any]:
+    content_type = (resp.headers.get("content-type", "") or "").lower()
+    text = resp.text or ""
+    trimmed = text.lstrip()[:1000].lower()
+    if resp.status_code == 404:
+        return {"rss_valid": False, "reason": "account_not_found"}
+    if resp.status_code in {403, 429, 503}:
+        return {"rss_valid": False, "reason": f"http_{resp.status_code}"}
+    if "html" in content_type or "<html" in trimmed:
+        if any(token in trimmed for token in ("cloudflare", "captcha", "just a moment", "attention required")):
+            return {"rss_valid": False, "reason": "bot_challenge_html"}
+        return {"rss_valid": False, "reason": "unexpected_html"}
+    if not any(tag in trimmed for tag in ("<rss", "<feed", "<?xml")):
+        return {"rss_valid": False, "reason": "not_rss_xml"}
+    return {"rss_valid": True, "reason": "ok"}
+
+
+def _classify_nitter_timeline_outcome(
+    instance_results: list[dict[str, Any]],
+    *,
+    had_any_feed_items: bool,
+    had_any_in_range: bool,
+    post_count: int,
+) -> dict[str, Any]:
+    if post_count > 0:
+        return {"outcome": "ok", "retryable": False, "message": "Fetched timeline posts successfully."}
+    reasons = [str(item.get("reason", "")) for item in instance_results]
+    statuses = {item.get("status") for item in instance_results if item.get("status") is not None}
+    all_404 = bool(instance_results) and statuses == {404}
+    blocked = any(reason in {"bot_challenge_html", "http_403", "http_429", "http_503"} for reason in reasons)
+    had_valid_feed = any(item.get("rss_valid") for item in instance_results)
+    if all_404:
+        return {"outcome": "account_not_found", "retryable": False, "message": "Account does not exist on checked instances."}
+    if blocked and not had_valid_feed:
+        return {"outcome": "instances_blocked", "retryable": True, "message": "Checked instances were blocked or challenged."}
+    if had_any_feed_items and not had_any_in_range:
+        return {"outcome": "date_filtered_out", "retryable": False, "message": "Timeline exists but date filter removed all posts."}
+    if had_valid_feed and not had_any_feed_items:
+        return {"outcome": "no_new_posts", "retryable": False, "message": "Valid feed but no posts are available."}
+    return {"outcome": "rss_unavailable", "retryable": True, "message": "Could not get a valid RSS feed from checked instances."}
+
+
+async def fetch_twitter_timeline(
+    handle: str,
+    start_date: date,
+    end_date: date,
+    max_posts: int = 20,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    import xml.etree.ElementTree as ET
+
+    username = _normalize_twitter_handle(handle)
+    diagnostic = _diagnostic(
+        "twitter", ok=False, handle=handle, normalized_handle=username,
+        source="nitter_rss_timeline", instance_results=[], retryable=False,
+    )
+    posts: list[dict[str, Any]] = []
+    had_any_feed_items = False
+    had_any_in_range = False
+    parse_errors: list[str] = []
+
+    profile = await fetch_twitter_profile_fxtwitter(username)
+    if profile:
+        diagnostic["profile"] = {
+            "name": profile.get("name", ""),
+            "screen_name": profile.get("screen_name", username),
+        }
+
+    for nitter in _get_nitter_instances():
+        inst: dict[str, Any] = {"instance": nitter, "url": f"{nitter}/{username}/rss"}
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                resp = await client.get(inst["url"], headers=BROWSER_HEADERS)
+            inst["status"] = resp.status_code
+            inst["content_type"] = resp.headers.get("content-type", "")
+            inst.update(_validate_nitter_rss_response(resp))
+            if not inst.get("rss_valid"):
+                diagnostic["instance_results"].append(inst)
+                continue
+            text = _re.sub(r'\s+xmlns[^=]*="[^"]*"', "", resp.text)
+            text = _re.sub(r'\s+xmlns:[^=]*="[^"]*"', "", text)
+            text = _re.sub(r'<(/)?[\w-]+:', r'<\1', text)
+            root = ET.fromstring(text)
+            feed_count = 0
+            in_range_count = 0
+            for entry in root.findall(".//item"):
+                feed_count += 1
+                title = (entry.findtext("title") or "").strip()
+                link = (entry.findtext("link") or "").strip()
+                content = _re.sub(r"<[^>]+>", "", (entry.findtext("description") or "").strip())
+                published_at = _parse_date(entry.findtext("pubDate"))
+                if not _date_in_range(published_at, start_date, end_date):
+                    continue
+                in_range_count += 1
+                if not title and not content:
+                    continue
+                posts.append({
+                    "platform": "twitter",
+                    "handle": f"@{username}",
+                    "title": title[:200],
+                    "url": link,
+                    "published_at": published_at,
+                    "raw_text": (content or title)[:2000],
+                    "fetched_at": _now(),
+                    "source_method": f"nitter_rss({nitter.split('//')[1].split('/')[0]})",
+                })
+                if len(posts) >= max_posts:
+                    break
+            inst["feed_item_count"] = feed_count
+            inst["in_range_item_count"] = in_range_count
+            diagnostic["instance_results"].append(inst)
+            had_any_feed_items = had_any_feed_items or (feed_count > 0)
+            had_any_in_range = had_any_in_range or (in_range_count > 0)
+            if len(posts) >= max_posts:
+                break
+        except Exception as exc:
+            inst["reason"] = "request_or_parse_error"
+            inst["error"] = type(exc).__name__
+            parse_errors.append(f"{nitter}: {type(exc).__name__}")
+            diagnostic["instance_results"].append(inst)
+
+    diagnostic.update(_classify_nitter_timeline_outcome(
+        diagnostic["instance_results"],
+        had_any_feed_items=had_any_feed_items,
+        had_any_in_range=had_any_in_range,
+        post_count=len(posts),
+    ))
+    diagnostic["errors"] = parse_errors
+    diagnostic["post_count"] = len(posts)
+    diagnostic["date_range"] = {"start": str(start_date), "end": str(end_date)}
+    diagnostic["available"] = diagnostic.get("outcome") != "account_not_found"
+    diagnostic["ok"] = True
+    return posts, diagnostic
+
+
 async def search_twitter_keywords(
     keywords: list[str],
     start_date: date,
@@ -1042,7 +1220,13 @@ async def search_twitter_keywords(
       1. Nitter HTML search page (nitter.net/search?q=...)
       2. Bing RSS with site:x.com
     """
-    diagnostic = _diagnostic("twitter_search", ok=False, keywords=keywords)
+    diagnostic = _diagnostic(
+        "twitter_search",
+        ok=False,
+        keywords=keywords,
+        guarantee="not_guaranteed",
+        note="Keyword hits are best-effort. Nitter RSS is for account timeline only.",
+    )
     keyword_str = " ".join(keywords[:5])
     posts: list[dict[str, Any]] = []
 

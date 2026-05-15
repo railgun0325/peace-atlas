@@ -12,6 +12,7 @@ Scenarios covered:
   9) 空样本报告写 不足以判断
 """
 
+import asyncio
 from datetime import date, datetime, timezone
 from unittest.mock import patch
 
@@ -21,10 +22,12 @@ from app.japan_social_accounts import (
     ALLOWED_STATUSES,
     account_summary,
     discover_candidate,
+    discover_japan_social_accounts,
     list_accounts,
     upsert_account,
     verify_account,
 )
+from app.account_discovery import extract_links_from_html, extract_links_from_rss, normalize_candidates
 from app.japan_peace_news import (
     JAPAN_PEACE_GDELT_QUERY,
     is_relevant_japan_peace,
@@ -33,6 +36,11 @@ from app.japan_peace_social import (
     DIAGNOSTIC_UNAVAILABLE,
     fetch_x_public_diagnostic,
     fetch_instagram_public_diagnostic,
+    fetch_twitter_timeline,
+)
+from app.instagram_safe import (
+    assess_login_readiness,
+    evaluate_login_state,
 )
 from app.japan_geo import (
     normalize,
@@ -201,6 +209,81 @@ def test_discover_candidate_repeat_updates_not_inserts(monkeypatch):
     assert result["account"]["status"] == "candidate"
     assert "UPDATE" in fake_cur.commands
     assert "INSERT" not in fake_cur.commands
+
+
+def test_extract_links_from_html_and_rss():
+    html = """
+    <html><body>
+      <a href="https://x.com/PeaceGroupJP">x</a>
+      <a href="/local/path">local</a>
+      <a href="https://www.instagram.com/peace.group.jp/">ig</a>
+    </body></html>
+    """
+    rss = """<?xml version="1.0"?><rss><channel>
+      <item><link>https://www.youtube.com/@peaceboatjp</link></item>
+    </channel></rss>"""
+    html_links = extract_links_from_html(html, "https://example.org")
+    rss_links = extract_links_from_rss(rss)
+    assert "https://x.com/PeaceGroupJP" in html_links
+    assert "https://example.org/local/path" in html_links
+    assert rss_links == ["https://www.youtube.com/@peaceboatjp"]
+
+
+def test_normalize_candidates_dedupes_and_normalizes():
+    links = [
+        "https://twitter.com/PeaceGroupJP",
+        "https://x.com/peacegroupjp/",
+        "https://www.instagram.com/Peace.Group/",
+    ]
+    candidates = normalize_candidates(
+        links,
+        evidence_url="https://bing.com/search?q=test",
+        source_type="bing_web",
+        source_detail="test",
+        context_text="official organization account",
+    )
+    keys = {(c.platform, c.handle) for c in candidates}
+    assert ("twitter", "@peacegroupjp") in keys
+    assert ("instagram", "@peace.group") in keys
+    assert len([c for c in candidates if c.platform == "twitter"]) == 1
+
+
+def test_discover_japan_social_accounts_writes_source_and_returns_diagnostics(monkeypatch):
+    from app import japan_social_accounts as mod
+
+    monkeypatch.setattr(mod, "load_seed_accounts", lambda: [])
+
+    async def fake_public(_keywords, *, max_requests=10):
+        return ([
+            type("Obj", (), {
+                "platform": "twitter",
+                "handle": "@peacegroupjp",
+                "profile_url": "https://x.com/peacegroupjp",
+                "evidence_url": "https://www.bing.com/search?q=peace",
+                "source_type": "bing_web",
+                "source_detail": "peace",
+                "category": "other",
+                "verification_status": "candidate_unverified",
+            })()
+        ], [{"ok": True, "stage": "query", "source_type": "bing_web", "keyword": "peace", "links_found": 1}])
+
+    writes: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(mod, "discover_public_candidates", fake_public)
+    monkeypatch.setattr(mod, "_save_account_source", lambda aid, st, sd: writes.append((aid, st, sd)))
+    monkeypatch.setattr(mod, "list_accounts", lambda **kwargs: [])
+    monkeypatch.setattr(
+        mod,
+        "discover_candidate",
+        lambda **kwargs: {"ok": True, "account": {"id": 123, "platform": kwargs["platform"], "handle": kwargs["handle"], "status": "candidate"}},
+    )
+
+    import asyncio
+    result = asyncio.run(discover_japan_social_accounts(platform="twitter", keywords=["peace"], max_accounts=5))
+    assert result["ok"] is True
+    assert result["discovered"] == 1
+    assert writes and writes[0][0] == 123
+    assert result["source_write_contract"]["table"] == "japan_social_account_sources"
+    assert any(d.get("stage") == "query" for d in result["diagnostics"])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -575,15 +658,16 @@ def test_prefecture_only_returns_input_for_unknown():
 # 8 — 平台 403/429/login wall 返回诊断不绕过
 # ═══════════════════════════════════════════════════════════════
 
-def test_x_public_diagnostic_reports_unavailable():
-    """X (Twitter) 公开诊断返回不可用，不尝试绕过登录。"""
+def test_x_public_diagnostic_reports_nitter_timeline_available():
+    """X (Twitter) 账号时间线诊断说明使用 Nitter RSS，不尝试登录绕过。"""
     import asyncio
 
     diag = asyncio.run(fetch_x_public_diagnostic("@peace_user"))
     assert diag["platform"] == "x"
-    assert diag["available"] is False
-    assert "login" in diag["detail"].lower() or "authenticated" in diag["detail"].lower()
-    assert diag["ok"] is False
+    assert diag["available"] is True
+    assert diag["ok"] is True
+    assert "nitter rss" in diag["message"].lower()
+    assert "no login" in diag["message"].lower()
 
 
 def test_instagram_public_diagnostic_reports_unavailable():
@@ -593,9 +677,7 @@ def test_instagram_public_diagnostic_reports_unavailable():
     diag = asyncio.run(fetch_instagram_public_diagnostic("@peace_jp"))
     assert diag["platform"] == "instagram"
     assert diag["available"] is False
-    assert ("login" in diag["detail"].lower()
-            or "authentication" in diag["detail"].lower()
-            or "login walls" in diag["detail"])
+    assert "disabled" in diag["message"].lower() or "legacy" in diag["detail"].lower()
     assert diag["ok"] is False
 
 
@@ -604,6 +686,39 @@ def test_diagnostic_unavailable_template():
     assert DIAGNOSTIC_UNAVAILABLE["ok"] is False
     assert DIAGNOSTIC_UNAVAILABLE["available"] is False
     assert "login" in DIAGNOSTIC_UNAVAILABLE["message"].lower()
+
+
+def test_instagram_safe_readiness_missing_state(monkeypatch):
+    from app import instagram_safe as mod
+    monkeypatch.setattr(mod, "READY_FILE", mod.PROJECT_DIR / "data" / "tmp-ready-missing")
+    monkeypatch.setattr(mod, "STATE_FILE", mod.PROJECT_DIR / "data" / "tmp-state-missing.json")
+    result = assess_login_readiness()
+    assert result["ok"] is False
+    assert result["status"] == "no_login_state"
+
+
+def test_instagram_safe_evaluate_session_expired():
+    status = evaluate_login_state(
+        "https://www.instagram.com/accounts/login/",
+        "<html><body>Log in</body></html>",
+    )
+    assert status == "session_expired"
+
+
+def test_instagram_safe_evaluate_challenge():
+    status = evaluate_login_state(
+        "https://www.instagram.com/challenge/",
+        "<html><body>challenge_required</body></html>",
+    )
+    assert status == "challenge_or_rate_limited"
+
+
+def test_instagram_safe_evaluate_private_or_missing():
+    status = evaluate_login_state(
+        "https://www.instagram.com/some_user/",
+        "<html><body>This account is private</body></html>",
+    )
+    assert status == "account_not_found_or_private"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -739,3 +854,104 @@ def test_gdelt_query_includes_antiwar_and_nuclear():
     assert "anti-war" in q.lower() or "antiwar" in q.lower()
     assert "nuclear" in q.lower()
     assert "hibakusha" in q.lower()
+
+
+class _FakeResponse:
+    def __init__(self, status_code=200, text="", content_type="application/rss+xml"):
+        self.status_code = status_code
+        self.text = text
+        self.headers = {"content-type": content_type}
+
+
+class _FakeAsyncClient:
+    queue: list[_FakeResponse] = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def get(self, *args, **kwargs):
+        assert _FakeAsyncClient.queue, "fake response queue is empty"
+        return _FakeAsyncClient.queue.pop(0)
+
+
+def test_twitter_timeline_accepts_valid_rss(monkeypatch):
+    from app import japan_peace_social as mod
+    async def _fake_profile(_u):
+        return None
+
+    rss = """<?xml version='1.0' encoding='UTF-8'?>
+<rss><channel><item><title>post1</title><link>https://x.com/a/status/1</link>
+<description>hello</description><pubDate>Wed, 01 May 2026 10:00:00 GMT</pubDate></item></channel></rss>"""
+    _FakeAsyncClient.queue = [_FakeResponse(200, rss, "application/rss+xml")]
+    monkeypatch.setattr(mod.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(mod, "fetch_twitter_profile_fxtwitter", _fake_profile)
+    monkeypatch.setattr(mod, "_get_nitter_instances", lambda: ["https://nitter.net"])
+
+    posts, diag = asyncio.run(fetch_twitter_timeline("@peace_boat", date(2026, 5, 1), date(2026, 5, 2), 5))
+    assert len(posts) == 1
+    assert diag["outcome"] == "ok"
+    assert diag["retryable"] is False
+    assert diag["instance_results"][0]["rss_valid"] is True
+
+
+def test_twitter_timeline_rejects_challenge_html(monkeypatch):
+    from app import japan_peace_social as mod
+    async def _fake_profile(_u):
+        return None
+
+    html = "<html><title>Just a moment...</title><body>cloudflare</body></html>"
+    _FakeAsyncClient.queue = [_FakeResponse(200, html, "text/html")]
+    monkeypatch.setattr(mod.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(mod, "fetch_twitter_profile_fxtwitter", _fake_profile)
+    monkeypatch.setattr(mod, "_get_nitter_instances", lambda: ["https://nitter.net"])
+
+    posts, diag = asyncio.run(fetch_twitter_timeline("@peace_boat", date(2026, 5, 1), date(2026, 5, 2), 5))
+    assert posts == []
+    assert diag["outcome"] == "instances_blocked"
+    assert diag["retryable"] is True
+    assert diag["instance_results"][0]["reason"] == "bot_challenge_html"
+
+
+def test_twitter_timeline_account_not_found(monkeypatch):
+    from app import japan_peace_social as mod
+    async def _fake_profile(_u):
+        return None
+
+    _FakeAsyncClient.queue = [
+        _FakeResponse(404, "not found", "text/plain"),
+        _FakeResponse(404, "not found", "text/plain"),
+    ]
+    monkeypatch.setattr(mod.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(mod, "fetch_twitter_profile_fxtwitter", _fake_profile)
+    monkeypatch.setattr(mod, "_get_nitter_instances", lambda: ["https://nitter.net", "https://nitter.cz"])
+
+    posts, diag = asyncio.run(fetch_twitter_timeline("peace_boat", date(2026, 5, 1), date(2026, 5, 2), 5))
+    assert posts == []
+    assert diag["outcome"] == "account_not_found"
+    assert diag["retryable"] is False
+    assert diag["available"] is False
+
+
+def test_twitter_timeline_date_filtered_out(monkeypatch):
+    from app import japan_peace_social as mod
+    async def _fake_profile(_u):
+        return None
+
+    rss = """<?xml version='1.0' encoding='UTF-8'?>
+<rss><channel><item><title>old</title><link>https://x.com/a/status/1</link>
+<description>old</description><pubDate>Wed, 01 Jan 2025 10:00:00 GMT</pubDate></item></channel></rss>"""
+    _FakeAsyncClient.queue = [_FakeResponse(200, rss, "application/rss+xml")]
+    monkeypatch.setattr(mod.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(mod, "fetch_twitter_profile_fxtwitter", _fake_profile)
+    monkeypatch.setattr(mod, "_get_nitter_instances", lambda: ["https://nitter.net"])
+
+    posts, diag = asyncio.run(fetch_twitter_timeline("@peace_boat", date(2026, 5, 1), date(2026, 5, 2), 5))
+    assert posts == []
+    assert diag["outcome"] == "date_filtered_out"
+    assert diag["retryable"] is False

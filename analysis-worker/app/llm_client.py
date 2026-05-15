@@ -25,7 +25,7 @@ def load_prompt() -> str:
     for candidate in candidates:
         if candidate and candidate.exists():
             return candidate.read_text(encoding="utf-8")
-    return "请基于结构化输入生成中立、证据分层的台湾政治公开情报周报。"
+    return "請基于結構化入力生成中立、証拠分層的日本反戦平和運動公開情報週報。"
 
 
 def load_japan_prompt() -> str:

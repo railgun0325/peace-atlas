@@ -22,7 +22,6 @@ from .discussions import (
     list_discussions,
     reddit_query_terms,
     reddit_subreddits,
-    set_dcard_cookies,
     start_fetch_run,
     store_discussion_post,
 )
@@ -40,7 +39,6 @@ from .models import (
     AnalyzeWeeklyRequest,
     AnalyzeWeeklyResponse,
     ArticleInput,
-    DcardCookieRequest,
     DiscussionFetchRequest,
     GdeltFetchRequest,
     GdeltFetchResponse,
@@ -73,7 +71,7 @@ from .weekly_analysis import (
 app = FastAPI(
     title="Japan Anti-War Intel Analysis Worker",
     version="0.2.0",
-    description="Public-source Japan anti-war peace intelligence analysis worker. Original Taiwan endpoints remain available under /taiwan paths.",
+    description="Public-source Japan anti-war peace intelligence analysis worker.",
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -103,29 +101,45 @@ async def admin_shutdown() -> dict[str, object]:
     }
 
 
-@app.post("/admin/dcard-cookies")
-async def admin_dcard_cookies(payload: DcardCookieRequest) -> dict[str, object]:
-    return {
-        "ok": False,
-        "message": "Dcard cookie 管理已在日本反战系统中禁用；本系统只使用公开来源，不登录、不绕过验证码。",
-    }
+@app.get("/admin/instagram/session")
+async def admin_instagram_session() -> dict[str, object]:
+    from .instagram_safe import assess_login_readiness
+
+    return assess_login_readiness()
 
 
-@app.get("/admin/dcard-cookies")
-async def admin_dcard_cookies_status() -> dict[str, object]:
+@app.post("/admin/instagram/session/clear")
+async def admin_instagram_session_clear() -> dict[str, object]:
+    from .instagram_safe import clear_login_session
+
+    return clear_login_session()
+
+
+@app.post("/admin/instagram/login/start")
+async def admin_instagram_login_start(
+    force_reset: bool = Query(default=False),
+    timeout_seconds: int = Query(default=600, ge=30, le=1800),
+) -> dict[str, object]:
+    if os.environ.get("DOCKER_ENV"):
+        return {
+            "ok": False,
+            "status": "interactive_login_unavailable",
+            "message": "Docker backend cannot open a Windows login window. Use the local login helper.",
+            "helper_url": "http://127.0.0.1:18190/instagram/login/start",
+            "helper_status_url": "http://127.0.0.1:18190/instagram/login/status",
+        }
+
+    from .instagram_safe import prepare_login_session
+
+    asyncio.create_task(
+        prepare_login_session(force_reset=force_reset, timeout_seconds=timeout_seconds)
+    )
     return {
         "ok": True,
-        "disabled": True,
-        "message": "Dcard cookie 管理已在日本反战系统中禁用。",
+        "status": "login_window_opening",
+        "message": "Opening Instagram login window.",
     }
 
-
-@app.post("/admin/refresh-dcard-cookies")
-async def admin_refresh_dcard_cookies() -> dict[str, object]:
-    return {
-        "ok": False,
-        "message": "Dcard cookie 刷新已在日本反战系统中禁用；不会启动登录或验证码流程。",
-    }
 
 
 @app.get("/")
@@ -134,17 +148,11 @@ async def index() -> FileResponse:
     japan_index = STATIC_DIR / "japan-index.html"
     if japan_index.exists():
         return FileResponse(japan_index)
-    # Fallback: serve original Taiwan index with a redirect note
-    taiwan_index = STATIC_DIR / "index.html"
-    if taiwan_index.exists():
-        return FileResponse(taiwan_index)
+    # Fallback: serve index page
+    fallback_index = STATIC_DIR / "index.html"
+    if fallback_index.exists():
+        return FileResponse(fallback_index)
     return PlainTextResponse("Japan Anti-War Intel Analysis Worker is running.", status_code=200)
-
-
-@app.get("/taiwan")
-async def taiwan_index() -> FileResponse:
-    """Original Taiwan politics index page, preserved for backward compatibility."""
-    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.post("/ingest", response_model=IngestResponse)
@@ -369,10 +377,10 @@ async def discussions_fetch_stream(payload: DiscussionFetchRequest) -> Streaming
         def line(event: dict[str, object]) -> str:
             return json.dumps(event, ensure_ascii=False, default=str) + "\n"
 
-        allowed = {"ptt", "dcard", "reddit", "discord"}
+        allowed = {"reddit", "discord"}
         platforms = [platform.lower() for platform in payload.platforms if platform.lower() in allowed]
         if not platforms:
-            platforms = ["ptt", "reddit"]
+            platforms = ["reddit"]
         keywords = [item.strip() for item in payload.keywords or [] if item and item.strip()]
         display_keywords = keywords or DEFAULT_DISCUSSION_KEYWORDS
         run_id = start_fetch_run(
@@ -676,11 +684,9 @@ def _weekly_progress_summary(structured: dict[str, object]) -> str:
 
 
 @app.get("/api/reports")
-async def list_reports(region: str = Query(default="japan", regex="^(japan|taiwan|all)$")) -> dict[str, object]:
-    """Default lists Japan reports. Use ?region=taiwan for original Taiwan reports."""
-    if region == "taiwan":
-        pattern = "taiwan-politics-weekly-*.md"
-    elif region == "all":
+async def list_reports(region: str = Query(default="japan", regex="^(japan|all)$")) -> dict[str, object]:
+    """List generated reports. Use ?region=all for all reports."""
+    if region == "all":
         pattern = "*.md"
     else:
         pattern = f"{JAPAN_REPORT_PREFIX}-*.md"

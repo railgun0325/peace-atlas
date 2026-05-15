@@ -1,0 +1,1461 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>日本反战运动公开情报系统</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      background: #f6f7f9;
+      color: #20242a;
+    }
+    body { margin: 0; }
+    header {
+      background: #0f5132;
+      color: white;
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    header h1 { font-size: 20px; margin: 0; font-weight: 650; }
+    header .status { font-size: 14px; opacity: .94; }
+    main { max-width: 1180px; margin: 0 auto; padding: 22px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    section {
+      background: white;
+      border: 1px solid #d9dee5;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(20,30,40,.04);
+    }
+    .full { grid-column: 1 / -1; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+    h3 { font-size: 14px; margin: 0 0 8px; }
+    label { display: block; font-size: 13px; margin: 10px 0 5px; color: #3c4652; }
+    input, textarea, select {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #b9c2cc;
+      border-radius: 6px;
+      padding: 9px 10px;
+      font: inherit;
+      background: white;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, .link-button {
+      margin-top: 12px;
+      border: 0;
+      border-radius: 6px;
+      background: #155eef;
+      color: white;
+      padding: 10px 13px;
+      font-weight: 650;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      line-height: 1.2;
+      font-size: 13px;
+    }
+    button.small { padding: 6px 10px; font-size: 12px; margin-top: 6px; }
+    button.secondary, .link-button.secondary { background: #46515f; }
+    button.danger { background: #c0392b; }
+    button.success { background: #1e7e34; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+    .sub-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .tab-button {
+      margin-top: 0;
+      background: #e8eef7;
+      color: #243244;
+    }
+    .tab-button.active { background: #155eef; color: white; }
+    .tab-panel[hidden] { display: none; }
+    .sub-panel[hidden] { display: none; }
+    .check-row {
+      display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0;
+    }
+    .check-row label { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: #20242a; }
+    input[type="checkbox"] { width: auto; }
+    pre {
+      white-space: pre-wrap; overflow-wrap: anywhere;
+      background: #111827; color: #e5e7eb;
+      border-radius: 8px; padding: 12px;
+      min-height: 60px; max-height: 420px; overflow: auto;
+      font-size: 13px;
+    }
+    .reports a, .service-links a {
+      display: inline-block;
+      color: #155eef; margin: 6px 12px 6px 0;
+      text-decoration: none; font-weight: 600;
+    }
+    .reports a:hover, .service-links a:hover { text-decoration: underline; }
+    .hint { margin: 8px 0 0; color: #667085; font-size: 13px; line-height: 1.5; }
+
+    /* Account list */
+    .account-list { display: grid; gap: 6px; margin-top: 10px; }
+    .account-row { display: grid; gap: 6px; }
+    .account-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border: 1px solid #e4e7ec; border-radius: 6px;
+      background: #fbfcfe; font-size: 13px; flex-wrap: wrap;
+    }
+    .account-inline-detail { margin: -2px 0 6px 0; }
+    .account-item .platform-badge {
+      font-size: 11px; padding: 2px 7px; border-radius: 10px;
+      background: #e8eef7; color: #243244; white-space: nowrap;
+    }
+    .account-item .name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .account-item .org { color: #667085; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .account-item .status-badge { font-size: 11px; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .status-verified { background: #d4edda; color: #155724; }
+    .status-seed { background: #fff3cd; color: #856404; }
+    .status-rejected { background: #f8d7da; color: #721c24; }
+    .summary-box {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 8px; margin-bottom: 10px;
+    }
+    .summary-item {
+      background: #f0f4ff; border-radius: 6px; padding: 8px 10px;
+      text-align: center; font-size: 12px;
+    }
+    .summary-item .count { font-size: 20px; font-weight: 700; color: #155eef; }
+
+    /* Map points list */
+    .map-points {
+      display: grid; gap: 6px; margin-bottom: 10px;
+    }
+    .map-point {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border: 1px solid #e4e7ec; border-radius: 6px;
+      font-size: 13px;
+    }
+    .map-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    }
+    .map-dot.antiwar { background: #155eef; }
+    .map-dot.base { background: #c0392b; }
+    .map-dot.event { background: #e67e22; }
+
+    /* Timeline */
+    .timeline {
+      border-left: 3px solid #155eef; padding-left: 16px;
+      display: grid; gap: 8px; max-height: 400px; overflow-y: auto;
+    }
+    .timeline-item {
+      position: relative; padding: 8px 10px;
+      background: #fbfcfe; border: 1px solid #e4e7ec; border-radius: 6px;
+      font-size: 13px;
+    }
+    .timeline-item::before {
+      content: ""; position: absolute; left: -21px; top: 12px;
+      width: 8px; height: 8px; border-radius: 50%; background: #155eef;
+    }
+    .timeline-date { font-size: 11px; color: #667085; }
+
+    /* Content list */
+    .content-list { display: grid; gap: 6px; margin-top: 10px; }
+    .content-item {
+      border: 1px solid #e4e7ec; border-radius: 6px; padding: 10px;
+      background: #fbfcfe; font-size: 13px;
+    }
+    .content-item .meta { color: #667085; font-size: 12px; }
+    .content-item .title { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+
+    /* Research task */
+    .task-item {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 8px 10px; border: 1px solid #e4e7ec;
+      border-radius: 6px; font-size: 13px; flex-wrap: wrap;
+    }
+    .task-status { font-size: 11px; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+    .task-pending { background: #fff3cd; color: #856404; }
+    .task-running { background: #cce5ff; color: #004085; }
+    .task-done { background: #d4edda; color: #155724; }
+    .task-failed { background: #f8d7da; color: #721c24; }
+
+    /* Quick time select */
+    .time-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .time-quick button { margin-top: 0; padding: 6px 12px; font-size: 12px; }
+
+    /* Progress */
+    .progress-wrap { display: none; margin-bottom: 8px; }
+    .progress-wrap .bar-bg { background: #e4e7ec; border-radius: 4px; height: 8px; overflow: hidden; }
+    .progress-wrap .bar-fill { background: #155eef; height: 100%; width: 0%; transition: width 0.3s; }
+    .progress-wrap .label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+
+    /* Detail box */
+    .detail-box {
+      margin-top: 12px; border-top: 1px solid #e4e7ec;
+      padding-top: 12px; line-height: 1.6;
+    }
+
+    /* Ensure text doesn't overflow */
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .break-word { overflow-wrap: break-word; word-break: break-word; }
+
+    @media (max-width: 860px) {
+      .grid, .row, .row3 { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>日本反战运动公开情报系统</h1>
+    <div class="status" id="health">正在检查服务状态...</div>
+  </header>
+  <main class="grid">
+    <!-- Service links -->
+    <section class="full">
+      <h2>服务入口</h2>
+      <div class="service-links">
+        <a href="http://127.0.0.1:5782" target="_blank" rel="noreferrer">n8n 自动化</a>
+        <a href="http://127.0.0.1:18181" target="_blank" rel="noreferrer">FreshRSS</a>
+        <a href="http://127.0.0.1:1210" target="_blank" rel="noreferrer">RSSHub</a>
+        <a href="http://127.0.0.1:15100" target="_blank" rel="noreferrer">网页变化监控</a>
+        <a href="http://127.0.0.1:6433/dashboard" target="_blank" rel="noreferrer">Qdrant</a>
+        <button class="small danger" onclick="shutdownBackend(this)">关闭后端</button>
+      </div>
+      <div class="hint" id="shutdownStatus"></div>
+      <p class="hint">Windows 当前把 5678 端口预留给系统网络组件，所以一键启动器自动把 n8n 的浏览器入口映射到 5682；容器内部仍使用 n8n 标准端口 5678。</p>
+    </section>
+
+    <!-- Tab bar -->
+    <section class="full">
+      <div class="tabs">
+        <button class="tab-button active" data-tab="retrieval" onclick="showMainTab('retrieval')">信息检索</button>
+        <button class="tab-button" data-tab="analysis" onclick="showMainTab('analysis')">AI 总结分析</button>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- TAB 1: 信息检索 -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="full tab-panel tab-retrieval" style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+      <!-- Sub-tabs -->
+      <section class="full" style="margin-bottom:0;">
+        <div class="sub-tabs">
+          <button class="tab-button active" data-sub="news" onclick="showSubTab('news')">新闻检索</button>
+          <button class="tab-button" data-sub="accounts" onclick="showSubTab('accounts')">社媒账号库</button>
+          <button class="tab-button" data-sub="social" onclick="showSubTab('social')">社媒抓取</button>
+          <button class="tab-button" data-sub="scraped" onclick="showSubTab('scraped')">已抓取内容</button>
+        </div>
+      </section>
+
+      <!-- Sub-panel: 新闻检索 -->
+      <div class="full sub-panel sub-news" style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+        <section>
+          <h2>日本反战新闻抓取</h2>
+          <div class="row">
+            <div><label>开始日期</label><input id="newsStart" type="date" /></div>
+            <div><label>结束日期</label><input id="newsEnd" type="date" /></div>
+          </div>
+          <label>关键词（每行一个，支持日/中/英文；留空使用内置反战主题包）</label>
+          <textarea id="newsKeywords" placeholder="例如：憲法九条&#10;例如：反戦デモ&#10;例如：沖縄基地"></textarea>
+          <div class="row">
+            <div>
+              <label>类别筛选</label>
+              <select id="newsCategory" multiple style="height:90px;">
+                <option value="constitution" selected>宪法九条/平和主義</option>
+                <option value="okinawa_base" selected>米軍基地/沖縄</option>
+                <option value="antiwar_movement" selected>反戦運動/市民団体</option>
+                <option value="sdf_policy" selected>自衛隊/軍事政策</option>
+                <option value="nuclear" selected>核兵器廃絶/被爆</option>
+                <option value="alliance" selected>日米同盟/安保</option>
+                <option value="diplomacy" selected>近隣外交/東アジア</option>
+                <option value="education" selected>平和教育/歴史認識</option>
+                <option value="humanitarian" selected>難民/人道/国際貢献</option>
+                <option value="media_freedom" selected>メディア/言論</option>
+              </select>
+            </div>
+            <div>
+              <label>每个关键词最大条数</label>
+              <input id="newsMax" type="number" min="1" max="250" value="15" />
+            </div>
+          </div>
+          <div class="actions">
+            <button onclick="fetchJapanNews(this)">开始抓取新闻</button>
+          </div>
+          <p class="hint">默认使用内置反战主题包（宪法九条、沖縄基地、反戦運動、自衛隊、核廃絶、日米同盟、近隣外交、平和教育、人道、言論）做多语种检索。</p>
+        </section>
+        <section>
+          <h2>抓取日志</h2>
+          <pre id="newsLog">等待新闻抓取操作...</pre>
+        </section>
+      </div>
+
+      <!-- Sub-panel: 社媒账号库 -->
+      <div class="full sub-panel sub-accounts" style="display:none;grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;" hidden>
+        <section>
+          <h2>组织摘要</h2>
+          <div class="summary-box" id="accountSummary"></div>
+          <h2 style="margin-top:14px;">账号概览 Top 10</h2>
+          <div class="account-list" id="accountTop10"></div>
+        </section>
+        <section>
+          <h2>候选样例（最多3条）</h2>
+          <div class="account-list" id="accountCandidates"></div>
+          <h2 style="margin-top:14px;">手动添加账号</h2>
+          <div class="row">
+            <div><label>平台</label><select id="acctPlatform"><option value="twitter">Twitter/X</option><option value="youtube">YouTube</option><option value="reddit">Reddit</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="rsshub">RSSHub</option></select></div>
+            <div><label>用户名/Handle</label><input id="acctUsername" placeholder="@peace_boat" /></div>
+          </div>
+          <div class="row">
+            <div><label>显示名称</label><input id="acctDisplayName" placeholder="Peace Boat 公式" /></div>
+            <div><label>账号链接</label><input id="acctUrl" placeholder="https://x.com/peace_boat" /></div>
+          </div>
+          <div class="row">
+            <div><label>类别</label><select id="acctCategory"><option value="citizen_group">市民団体</option><option value="ngo">NGO</option><option value="party">政党</option><option value="media">媒体</option><option value="independent_media">独立媒体</option><option value="forum">论坛</option><option value="individual">个人</option><option value="other">其他</option></select></div>
+            <div><label>标签（逗号分隔）</label><input id="acctTags" placeholder="反戦,沖縄,平和" /></div>
+          </div>
+          <div class="actions">
+            <button onclick="addSocialAccount(this)">添加账号</button>
+          </div>
+          <h2 style="margin-top:14px;">发现候选账号</h2>
+          <div class="row">
+            <div><label>平台（留空=全平台）</label><select id="discPlatform"><option value="">全部平台</option><option value="twitter">Twitter/X</option><option value="instagram">Instagram</option><option value="youtube">YouTube</option><option value="reddit">Reddit</option></select></div>
+            <div><label>最大候选数</label><input id="discMax" type="number" min="1" max="100" value="20" /></div>
+          </div>
+          <label>发现关键词（每行一个）</label>
+          <textarea id="discKeywords" placeholder="反戦&#10;平和運動&#10;憲法九条">反戦
+戦争反対
+平和運動
+平和
+平和主義
+平和外交
+平和教育
+平和集会
+憲法九条
+憲法9条
+九条の会
+護憲
+改憲反対
+安保法制反対
+安全保障
+防衛
+防衛費
+沖縄基地
+沖縄
+辺野古
+普天間
+米軍基地
+軍拡反対
+武器輸出反対
+核兵器廃絶
+核廃絶
+核軍縮
+核兵器禁止条約
+人権
+アムネスティ
+Human Rights
+被爆者
+広島 平和
+長崎 平和
+市民団体
+反基地
+日米安保
+地位協定
+Peace Boat
+Article 9</textarea>
+          <div class="actions">
+            <button onclick="discoverAccounts(this)">发现候选</button>
+            <button class="secondary" onclick="loadAccounts()">刷新账号列表</button>
+          </div>
+          <div class="detail-box" id="discoverStatus" hidden></div>
+        </section>
+        <section class="full">
+          <h2>全部账号</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <select id="acctFilterPlatform" onchange="loadAccounts()" style="width:auto;min-width:110px;">
+              <option value="">全部平台</option><option value="twitter">Twitter/X</option><option value="youtube">YouTube</option><option value="reddit">Reddit</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="rsshub">RSSHub</option>
+            </select>
+            <select id="acctFilterStatus" onchange="loadAccounts()" style="width:auto;min-width:110px;">
+              <option value="">全部状态</option><option value="verified">已核验</option><option value="seed">待核验/候选</option><option value="rejected">已排除</option>
+            </select>
+            <input id="acctFilterSearch" placeholder="搜索名称或组织..." oninput="loadAccounts()" style="width:auto;min-width:160px;flex:1;" />
+          </div>
+          <div class="account-list" id="accountList"></div>
+          <div class="detail-box" id="accountDetail"></div>
+        </section>
+      </div>
+
+      <!-- Sub-panel: 社媒抓取 -->
+      <div class="full sub-panel sub-social" style="display:none;grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;" hidden>
+        <section>
+          <h2>社媒内容抓取</h2>
+          <div class="row">
+            <div><label>开始日期</label><input id="socialStart" type="date" /></div>
+            <div><label>结束日期</label><input id="socialEnd" type="date" /></div>
+          </div>
+          <label>平台</label>
+          <div class="check-row">
+            <label><input type="checkbox" id="socialTwitter" checked /> Twitter/X</label>
+            <label><input type="checkbox" id="socialInstagram" checked /> Instagram</label>
+            <label><input type="checkbox" id="socialYoutube" /> YouTube</label>
+            <label><input type="checkbox" id="socialReddit" /> Reddit</label>
+            <label><input type="checkbox" id="socialMastodon" /> Mastodon</label>
+            <label><input type="checkbox" id="socialRsshub" /> RSSHub</label>
+          </div>
+          <label>关键词（每行一个；默认会随机选取一组关键词抓取）</label>
+          <textarea id="socialKeywords">反戦
+戦争反対
+平和運動
+憲法九条
+憲法9条
+九条の会
+護憲
+改憲反対
+安保法制反対
+軍拡反対
+武器輸出反対
+沖縄 米軍基地
+辺野古 抗議
+普天間 基地
+核兵器廃絶
+広島 平和
+長崎 平和
+Peace Boat
+Article 9
+Japan peace movement</textarea>
+          <label><input type="checkbox" id="socialIncludeVerifiedAccounts" /> 同时抓取已核验账号公开内容</label>
+          <div class="detail-box">
+            <strong>Instagram 登录状态</strong>
+            <p class="hint" id="igLoginStatus">尚未检查。</p>
+            <div class="actions">
+              <button class="small secondary" onclick="refreshInstagramLoginStatus(this)">检查状态</button>
+              <button class="small success" onclick="startInstagramLogin(this,false)">登录/续登</button>
+              <button class="small secondary" onclick="startInstagramLogin(this,true)">更换账号</button>
+              <button class="small danger" onclick="clearInstagramLogin(this)">清除会话</button>
+            </div>
+            <p class="hint">登录窗口只用于保存你自己的 Instagram 会话；抓取仍受低频限制。更换账号会先清除旧会话。</p>
+          </div>
+          <label>指定账号 ID（逗号分隔；填写后会额外抓取这些账号）</label>
+          <input id="socialAccountIds" placeholder="1,2,3" />
+          <label>每个平台/账号最大帖子数</label>
+          <input id="socialMaxPosts" type="number" min="1" max="500" value="50" />
+          <div class="actions">
+            <button onclick="fetchSocialMedia(this)">开始抓取社媒</button>
+          </div>
+        </section>
+        <section>
+          <h2>社媒抓取日志</h2>
+          <div class="progress-wrap" id="socialProgress">
+            <div class="label"><span id="socialProgressLabel">正在抓取...</span><span id="socialProgressCount">0/0</span></div>
+            <div class="bar-bg"><div class="bar-fill" id="socialProgressBar"></div></div>
+          </div>
+          <pre id="socialLog">等待社媒抓取操作...</pre>
+        </section>
+      </div>
+
+      <!-- Sub-panel: 已抓取内容 -->
+      <div class="full sub-panel sub-scraped" style="display:none;grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;" hidden>
+        <section>
+          <h2>新闻 &amp; 社媒内容查询</h2>
+          <div class="row">
+            <div><label>开始日期</label><input id="scrapedStart" type="date" /></div>
+            <div><label>结束日期</label><input id="scrapedEnd" type="date" /></div>
+          </div>
+          <div class="row">
+            <div>
+              <label>内容类型</label>
+              <select id="scrapedType"><option value="">全部</option><option value="news">新闻</option><option value="social">社媒帖子</option></select>
+            </div>
+            <div>
+              <label>平台</label>
+              <select id="scrapedPlatform"><option value="">全部</option><option value="twitter">Twitter/X</option><option value="youtube">YouTube</option><option value="reddit">Reddit</option><option value="rsshub">RSSHub</option></select>
+            </div>
+          </div>
+          <label>关键词搜索</label>
+          <input id="scrapedKeyword" placeholder="标题或正文关键词" />
+          <div class="actions">
+            <button onclick="loadScrapedContent()">查询已抓内容</button>
+          </div>
+          <div class="content-list" id="scrapedList"></div>
+          <div class="detail-box" id="scrapedDetail"></div>
+        </section>
+        <section>
+          <h2>反战事件记录</h2>
+          <div class="content-list" id="eventsList"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- TAB 2: AI 总结分析 -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <div class="full tab-panel tab-analysis" style="display:none;grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;" hidden>
+      <!-- Time range + trigger -->
+      <section class="full">
+        <h2>时间范围 &amp; 分析触发</h2>
+        <div class="time-quick">
+          <button onclick="setAnalysisRange(7)" class="secondary small">近7天</button>
+          <button onclick="setAnalysisRange(30)" class="secondary small">近30天</button>
+          <button onclick="setAnalysisQuarter('current')" class="secondary small">本季度</button>
+          <button onclick="setAnalysisQuarter('last')" class="secondary small">上季度</button>
+        </div>
+        <div class="row">
+          <div><label>开始日期</label><input id="analysisStart" type="date" /></div>
+          <div><label>结束日期</label><input id="analysisEnd" type="date" /></div>
+        </div>
+        <div class="check-row" style="margin-top:10px;">
+          <label><input type="checkbox" id="analysisIncludeNews" checked /> 含新闻</label>
+          <label><input type="checkbox" id="analysisIncludeSocial" checked /> 含社媒</label>
+          <label><input type="checkbox" id="analysisIncludeEvents" checked /> 含事件</label>
+        </div>
+        <div class="actions">
+          <button onclick="runJapanAnalysis(this)">生成 AI 分析报告</button>
+          <button class="secondary" onclick="loadJapanReports()">刷新报告列表</button>
+        </div>
+      </section>
+
+      <!-- Map + Timeline -->
+      <section>
+        <h2>地理分布 / 热点地图</h2>
+        <div class="map-points" id="mapPoints">
+          <div class="map-point"><span class="map-dot antiwar"></span><strong>東京都</strong> — 国会・首相官邸・防衛省；反戦集会・請願主要地点</div>
+          <div class="map-point"><span class="map-dot base"></span><strong>沖縄県</strong> — 普天間・辺野古・嘉手納；基地負担反対運動の中心</div>
+          <div class="map-point"><span class="map-dot antiwar"></span><strong>広島県</strong> — 平和記念公園；毎年平和記念式典・核廃絶集会</div>
+          <div class="map-point"><span class="map-dot antiwar"></span><strong>長崎県</strong> — 平和公園；核廃絶・被爆者運動</div>
+          <div class="map-point"><span class="map-dot event"></span><strong>大阪府</strong> — 市民団体・労働組合による反戦デモ</div>
+          <div class="map-point"><span class="map-dot event"></span><strong>神奈川県（横須賀）</strong> — 米海軍基地；反基地運動</div>
+          <div class="map-point"><span class="map-dot base"></span><strong>山口県（岩国）</strong> — 米海兵隊基地；反基地市民運動</div>
+          <div class="map-point"><span class="map-dot event"></span><strong>京都府</strong> — 九条の会・平和教育関連集会</div>
+          <div class="map-point"><span class="map-dot antiwar"></span><strong>福岡県</strong> — 九州地方の平和運動拠点</div>
+          <div class="map-point"><span class="map-dot base"></span><strong>青森県（三沢）</strong> — 米空軍基地；反基地・反オスプレイ運動</div>
+        </div>
+        <p class="hint">蓝色=反战运动热点，红色=美军基地相关，橙色=集会/事件。分析完成后将根据实际数据更新。</p>
+      </section>
+      <section>
+        <h2>时间轴</h2>
+        <div class="timeline" id="timeline">
+          <div class="timeline-item"><span class="timeline-date">--</span> 请先执行 AI 分析以填充时间轴。</div>
+        </div>
+      </section>
+
+      <!-- Analysis stream -->
+      <section>
+        <h2>报告生成日志</h2>
+        <pre id="analysisLog">等待 AI 分析操作...</pre>
+      </section>
+      <section>
+        <h2>报告列表</h2>
+        <div class="reports" id="japanReports">尚未生成报告。</div>
+      </section>
+
+      <!-- Deep research -->
+      <section class="full">
+        <h2>深度研究任务</h2>
+        <div class="row3">
+          <div>
+            <label>任务类型</label>
+            <select id="researchType">
+              <option value="topic_deep_dive">主题深挖</option>
+              <option value="entity_profile">实体画像</option>
+              <option value="sentiment_trend">情绪趋势</option>
+              <option value="event_reconstruct">事件还原</option>
+              <option value="cross_platform">跨平台比较</option>
+            </select>
+          </div>
+          <div>
+            <label>参数 JSON</label>
+            <input id="researchParams" placeholder='{"topic": "憲法九条", "depth": 3}' />
+          </div>
+          <div class="actions" style="align-items:end;">
+            <button onclick="createResearchTask(this)" style="align-self:end;">创建研究任务</button>
+            <button class="secondary small" onclick="pollResearchTasks()">刷新任务列表</button>
+          </div>
+        </div>
+        <div id="researchTasks" style="margin-top:10px;display:grid;gap:6px;">暂无研究任务。</div>
+      </section>
+    </div>
+
+    <!-- Global output (hidden, used for status toasts) -->
+    <section class="full" style="display:none;" id="globalOutputSection">
+      <pre id="output"></pre>
+    </section>
+  </main>
+
+  <script>
+    const out = document.getElementById("output");
+    const fmt = d => d.toISOString().slice(0, 10);
+    const today = new Date();
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
+    const monthAgo = new Date(Date.now() - 30 * 86400000);
+
+    // Init dates
+    for (const id of ["newsEnd","scrapedEnd","socialEnd","analysisEnd","gdeltEnd","weekEnd","discussionEnd","contentEnd"])
+      { const el = document.getElementById(id); if (el) el.value = fmt(today); }
+    for (const id of ["newsStart","socialStart","scrapedStart","analysisStart"])
+      { const el = document.getElementById(id); if (el) el.value = fmt(monthAgo); }
+
+    // ══════════════════════════════════════
+    // Tab switching
+    // ══════════════════════════════════════
+    function showMainTab(name) {
+      for (const panel of document.querySelectorAll(".tab-panel")) {
+        panel.hidden = !panel.classList.contains(`tab-${name}`);
+        panel.style.display = panel.hidden ? "none" : "grid";
+      }
+      for (const btn of document.querySelectorAll("[data-tab]")) {
+        btn.classList.toggle("active", btn.dataset.tab === name);
+      }
+      if (name === "retrieval") showSubTab("news");
+    }
+
+    function showSubTab(name) {
+      for (const panel of document.querySelectorAll(".sub-panel")) {
+        panel.hidden = !panel.classList.contains(`sub-${name}`);
+        panel.style.display = panel.hidden ? "none" : "grid";
+      }
+      for (const btn of document.querySelectorAll("[data-sub]")) {
+        btn.classList.toggle("active", btn.dataset.sub === name);
+      }
+      if (name === "accounts") loadAccounts();
+      if (name === "scraped") { loadScrapedContent(); loadEvents(); }
+    }
+
+    // ══════════════════════════════════════
+    // Helpers
+    // ══════════════════════════════════════
+    async function request(path, options = {}) {
+      const res = await fetch(path, options);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = text; }
+      if (!res.ok) throw new Error(typeof data === "string" ? data : JSON.stringify(data));
+      return data;
+    }
+
+    async function withBusy(button, fn) {
+      if (button) button.disabled = true;
+      try { await fn(); } catch (err) {
+        const msg = err.message || String(err);
+        const target = document.activeElement?.closest(".tab-panel:not([hidden])") ? null : out;
+        if (out) out.textContent = msg;
+        console.error(msg);
+      } finally { if (button) button.disabled = false; }
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[ch]));
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, "&#096;");
+    }
+
+    async function checkHealth() {
+      try {
+        const data = await request("/health");
+        document.getElementById("health").textContent =
+          `PostgreSQL: ${data.postgres ? "正常" : "异常"} / Qdrant: ${data.qdrant ? "可访问" : "未连接"}`;
+      } catch { document.getElementById("health").textContent = "服务状态异常"; }
+    }
+
+    // ══════════════════════════════════════
+    function wait(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    const IG_LOGIN_HELPER = "http://127.0.0.1:18190";
+
+    function setInstagramLoginStatus(message) {
+      const box = document.getElementById("igLoginStatus");
+      if (box) box.textContent = message;
+    }
+
+    async function helperJson(path, options = {}) {
+      const res = await fetch(`${IG_LOGIN_HELPER}${path}`, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.message || text || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function refreshInstagramLoginStatus(button) {
+      await withBusy(button, async () => {
+        try {
+          const data = await request("/admin/instagram/session");
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+        } catch (err) {
+          setInstagramLoginStatus(`检查失败：${err.message || err}`);
+        }
+      });
+    }
+
+    async function pollInstagramLoginStatus() {
+      for (let i = 0; i < 180; i++) {
+        await wait(2000);
+        try {
+          const data = await helperJson("/instagram/login/status");
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+          if (data.status === "login_saved" || data.status === "login_not_completed" || data.status === "helper_error") {
+            await refreshInstagramLoginStatus(null);
+            return;
+          }
+        } catch {
+          return;
+        }
+      }
+    }
+
+    async function startInstagramLogin(button, forceReset) {
+      if (forceReset && !confirm("更换账号会清除当前保存的 Instagram 会话，然后打开登录窗口。继续？")) return;
+      await withBusy(button, async () => {
+        setInstagramLoginStatus(forceReset ? "正在准备更换账号..." : "正在打开登录窗口...");
+        let data = null;
+        try {
+          data = await request(`/admin/instagram/login/start?force_reset=${forceReset ? "true" : "false"}`, { method: "POST" });
+        } catch (err) {
+          data = { ok: false, status: "backend_error", message: err.message || String(err) };
+        }
+        if (data.ok) {
+          setInstagramLoginStatus(data.message || "登录窗口正在打开。");
+          return;
+        }
+        try {
+          const helper = await helperJson(`/instagram/login/start?force_reset=${forceReset ? "true" : "false"}`, { method: "POST" });
+          setInstagramLoginStatus(helper.message || "登录窗口正在打开。请在弹出的浏览器里完成登录。");
+          pollInstagramLoginStatus();
+        } catch (err) {
+          setInstagramLoginStatus(`无法打开登录助手：${err.message || err}。请先运行 scripts\\Start-InstagramLoginHelper.ps1，或用一键启动器重新启动系统。`);
+        }
+      });
+    }
+
+    async function clearInstagramLogin(button) {
+      if (!confirm("确认清除已保存的 Instagram 登录状态？")) return;
+      await withBusy(button, async () => {
+        try {
+          let data;
+          try {
+            data = await helperJson("/instagram/session/clear", { method: "POST" });
+          } catch {
+            data = await request("/admin/instagram/session/clear", { method: "POST" });
+          }
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+        } catch (err) {
+          setInstagramLoginStatus(`清除失败：${err.message || err}`);
+        }
+      });
+    }
+
+    async function shutdownBackend(button) {
+      if (!confirm("确认关闭日本项目后端 analysis-worker？关闭后页面会失去连接，需要用启动器或 docker compose 重新启动。")) return;
+      const box = document.getElementById("shutdownStatus");
+      button.disabled = true;
+      box.textContent = "正在发送关闭请求...";
+      try {
+        await fetch("/admin/shutdown", { method: "POST" });
+      } catch {}
+      for (let i = 0; i < 20; i++) {
+        await wait(1000);
+        try {
+          const res = await fetch("/health", { cache: "no-store" });
+          if (res.ok) {
+            box.textContent = `后端仍在响应，继续确认中... (${i + 1}/20)`;
+            continue;
+          }
+        } catch {
+          box.textContent = "后端已关闭：健康检查已无法连接。";
+          document.getElementById("health").textContent = "后端已关闭";
+          return;
+        }
+      }
+      box.textContent = "没有确认关闭：后端仍在响应，可能被 Docker 自动重启或请求未生效。";
+      button.disabled = false;
+    }
+
+    // News fetch
+    // ══════════════════════════════════════
+    async function fetchJapanNews(button) {
+      await withBusy(button, async () => {
+        const keywords = document.getElementById("newsKeywords").value.split("\n").map(s => s.trim()).filter(Boolean);
+        const catSelect = document.getElementById("newsCategory");
+        const categories = [...catSelect.selectedOptions].map(o => o.value);
+        const log = document.getElementById("newsLog");
+        log.textContent = "开始日本反战新闻抓取...\n";
+
+        const res = await fetch("/japan/news/fetch/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: document.getElementById("newsStart").value,
+            end_date: document.getElementById("newsEnd").value,
+            keywords: keywords.length ? keywords : null,
+            categories: categories.length ? categories : null,
+            max_records: Number(document.getElementById("newsMax").value || 15),
+            ingest: true
+          })
+        });
+        if (!res.ok || !res.body) throw new Error(await res.text());
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n"); buffer = lines.pop() || "";
+          for (const rawLine of lines) {
+            if (!rawLine.trim()) continue;
+            const evt = JSON.parse(rawLine);
+            log.textContent += formatNewsEvent(evt) + "\n";
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+        if (buffer.trim()) { log.textContent += formatNewsEvent(JSON.parse(buffer)) + "\n"; }
+      });
+    }
+
+    function formatNewsEvent(evt) {
+      switch (evt.type) {
+        case "start": return `开始检索：${evt.total_queries || 0} 个主题，多语种新闻源。`;
+        case "article": return `  找到：[${evt.language || "?"}] ${evt.title}\n  来源：${evt.source_name || "?"} | ${evt.url}`;
+        case "query_done": return `查询完成：共 ${evt.fetched_so_far || 0} 条。`;
+        case "done": return `完成：抓到 ${evt.fetched} 条，新入库 ${evt.inserted} 条，重复 ${evt.skipped_duplicates} 条。`;
+        case "error": return `错误：${evt.message}`;
+        default: return `${evt.type}: ${JSON.stringify(evt)}`;
+      }
+    }
+
+    // ══════════════════════════════════════
+    // Social accounts
+    // ══════════════════════════════════════
+    async function loadAccounts() {
+      try {
+        const platform = document.getElementById("acctFilterPlatform").value;
+        const status = document.getElementById("acctFilterStatus").value;
+        const search = document.getElementById("acctFilterSearch").value.trim();
+        const params = new URLSearchParams();
+        if (platform) params.set("platform", platform);
+        if (status) params.set("status", status);
+        if (search) params.set("q", search);
+        params.set("limit", "200");
+
+        const data = await request(`/api/japan/social-accounts?${params.toString()}`);
+        const accounts = data.accounts || [];
+        const list = document.getElementById("accountList");
+        if (!accounts.length) { list.innerHTML = "<p class='hint'>暂无账号记录。</p>"; return; }
+
+        const statusLabels = { verified: "已核验", candidate: "候选", seed: "待核验", rejected: "已排除", stale: "已过期" };
+        list.innerHTML = accounts.map(a => {
+          const status = a.status || (a.verified ? "verified" : (a.is_candidate ? "candidate" : "seed"));
+          const statusCls = status === "verified" ? "status-verified" : "status-seed";
+          const statusText = statusLabels[status] || status;
+          return `<div class="account-row" id="account-row-${a.id}">
+            <div class="account-item">
+              <span class="platform-badge">${escapeHtml(a.platform)}</span>
+              <span class="name truncate" style="flex:1;min-width:0;">${escapeHtml(a.display_name || a.username)}</span>
+              <span class="org truncate" style="max-width:140px;">${escapeHtml(a.organization || a.bio || "")}</span>
+              <span class="status-badge ${statusCls}">${statusText}</span>
+              <button class="small secondary" onclick="viewAccountDetail(${a.id})">详情</button>
+              ${status === "verified" ? "" : `<button class="small success" onclick="verifyAccount(${a.id},true)">核验</button>`}
+              ${status === "rejected" ? "" : `<button class="small danger" onclick="verifyAccount(${a.id},false)">排除</button>`}
+            </div>
+            <div class="detail-box account-inline-detail" id="account-detail-${a.id}" hidden></div>
+          </div>`;
+        }).join("");
+
+        // Summary
+        const summary = document.getElementById("accountSummary");
+        const cats = {};
+        for (const a of accounts) {
+          const c = a.category || "other";
+          cats[c] = (cats[c] || 0) + 1;
+        }
+        const catLabels = { citizen_group:"市民団体", ngo:"NGO", party:"政党", media:"媒体", independent_media:"独立媒体", forum:"论坛", individual:"个人", antiwar:"反戦", other:"其他" };
+        summary.innerHTML = Object.entries(cats).map(([k,v]) =>
+          `<div class="summary-item"><div class="count">${v}</div>${catLabels[k] || k}</div>`
+        ).join("");
+
+        // Top 10 account overview: verified first, then recent candidates.
+        const statusRank = { verified: 0, seed: 1, candidate: 2, stale: 3, rejected: 4 };
+        const top10 = [...accounts].sort((a,b) => {
+          const sa = a.status || (a.verified ? "verified" : (a.is_candidate ? "candidate" : "seed"));
+          const sb = b.status || (b.verified ? "verified" : (b.is_candidate ? "candidate" : "seed"));
+          return (statusRank[sa] ?? 9) - (statusRank[sb] ?? 9)
+            || String(b.updated_at || b.discovered_at || "").localeCompare(String(a.updated_at || a.discovered_at || ""))
+            || String(a.platform || "").localeCompare(String(b.platform || ""));
+        }).slice(0, 10);
+        document.getElementById("accountTop10").innerHTML = top10.map(a =>
+          `<div class="account-item">
+            <span class="platform-badge">${escapeHtml(a.platform)}</span>
+            <span class="name truncate">${escapeHtml(a.display_name || a.username)}</span>
+            <span style="font-size:11px;color:#667085;margin-left:auto;">${escapeHtml(a.status || (a.verified ? "verified" : "candidate"))}</span>
+          </div>`
+        ).join("");
+
+        // Candidates (max 3)
+        const candidates = accounts.filter(a => a.is_candidate).slice(0, 3);
+        document.getElementById("accountCandidates").innerHTML = candidates.length
+          ? candidates.map(a =>
+            `<div class="account-item">
+              <span class="platform-badge">${escapeHtml(a.platform)}</span>
+              <span class="name truncate">${escapeHtml(a.display_name || a.username)}</span>
+              <span class="status-badge status-seed">候选</span>
+              <button class="small success" onclick="verifyAccount(${a.id},true)">核验</button>
+              <button class="small danger" onclick="verifyAccount(${a.id},false)">排除</button>
+            </div>`
+          ).join("")
+          : "<p class='hint'>暂无候选账号。</p>";
+      } catch (err) {
+        document.getElementById("accountList").textContent = "加载失败：" + (err.message || err);
+      }
+    }
+
+    function accountDetailTarget(id) {
+      return document.getElementById(`account-detail-${id}`) || document.getElementById("accountDetail");
+    }
+
+    function setAccountDetailMessage(id, message) {
+      const target = accountDetailTarget(id);
+      if (!target) return;
+      target.hidden = false;
+      target.dataset.loaded = "false";
+      target.innerHTML = escapeHtml(message);
+    }
+
+    async function viewAccountDetail(id, forceOpen = false) {
+      const target = accountDetailTarget(id);
+      if (!target) return;
+      if (!forceOpen && !target.hidden && target.dataset.loaded === "true") {
+        target.hidden = true;
+        return;
+      }
+      document.querySelectorAll(".account-inline-detail").forEach(el => {
+        if (el.id !== `account-detail-${id}`) el.hidden = true;
+      });
+      target.hidden = false;
+      target.innerHTML = "加载中...";
+      try {
+        const data = await request(`/api/japan/social-accounts/${id}`);
+        const a = data.account || {};
+        const status = a.status || (a.verified ? "verified" : (a.is_candidate ? "candidate" : "seed"));
+        target.dataset.loaded = "true";
+        target.innerHTML = `
+          <h3>${escapeHtml(a.display_name || a.username)}</h3>
+          <p>平台：${escapeHtml(a.platform)} | 用户名：${escapeHtml(a.username)}</p>
+          <p>链接：<a href="${escapeAttr(a.account_url)}" target="_blank" rel="noreferrer">${escapeHtml(a.account_url)}</a></p>
+          <p>类别：${escapeHtml(a.category||"")}</p>
+          <p>简介：${escapeHtml(a.bio || "无")}</p>
+          <p>标签：${escapeHtml((a.tags||[]).join(", "))}</p>
+          <p>核验状态：${escapeHtml(status)} | 添加方式：${escapeHtml(a.added_by||"")}</p>
+          <p>证据链接：${escapeHtml(a.verification_evidence_url || a.evidence_url || a.account_url || "无")}</p>
+          <p class="hint">候选账号只代表公开线索，可能已失效；核验前不会进入主要分析结论。</p>
+          <div class="actions">
+            ${status === "verified" ? "" : `<button class="small success" onclick="verifyAccount(${a.id},true)">核验</button>`}
+            ${status === "rejected" ? "" : `<button class="small danger" onclick="verifyAccount(${a.id},false)">排除</button>`}
+          </div>
+        `;
+      } catch (err) {
+        target.dataset.loaded = "false";
+        target.innerHTML = "加载失败：" + escapeHtml(err.message || err);
+      }
+    }
+
+    async function addSocialAccount(button) {
+      await withBusy(button, async () => {
+        const tagsRaw = document.getElementById("acctTags").value.trim();
+        const tags = tagsRaw ? tagsRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
+        await request("/api/japan/social-accounts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            platform: document.getElementById("acctPlatform").value,
+            username: document.getElementById("acctUsername").value,
+            display_name: document.getElementById("acctDisplayName").value,
+            account_url: document.getElementById("acctUrl").value,
+            category: document.getElementById("acctCategory").value,
+            tags: tags
+          })
+        });
+        await loadAccounts();
+      });
+    }
+
+    async function verifyAccount(id, verified) {
+      try {
+        if (!verified && !confirm("确认将该账号标记为已排除？")) return;
+        let evidenceUrl = null;
+        if (verified) {
+          evidenceUrl = prompt("核验依据链接（可留空，系统会优先使用账号已有链接）", "") || null;
+        }
+        await request(`/api/japan/social-accounts/${id}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verified: verified, evidence_url: evidenceUrl })
+        });
+        await loadAccounts();
+        await viewAccountDetail(id, true);
+      } catch (err) {
+        setAccountDetailMessage(id, "操作失败：" + (err.message || err));
+      }
+    }
+
+    async function discoverAccounts(button) {
+      await withBusy(button, async () => {
+        const box = document.getElementById("discoverStatus");
+        const keywords = document.getElementById("discKeywords").value.split("\n").map(s => s.trim()).filter(Boolean);
+        const platform = document.getElementById("discPlatform").value || null;
+        const maxAccounts = Number(document.getElementById("discMax").value || 20);
+        if (box) {
+          box.hidden = false;
+          box.innerHTML = `正在发现候选账号...<br>平台：${escapeHtml(platform || "全部平台")}；最大候选数：${maxAccounts}；关键词：${keywords.length || "默认词条"}。`;
+        }
+        let data;
+        try {
+          data = await request("/api/japan/social-accounts/discover", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              platform: platform,
+              keywords: keywords,
+              max_accounts: maxAccounts
+            })
+          });
+        } catch (err) {
+          if (box) box.innerHTML = `<strong>发现候选失败。</strong><br>${escapeHtml(err.message || err)}`;
+          throw err;
+        }
+        await loadAccounts();
+        const accounts = data.accounts || [];
+        const diagnostics = data.diagnostics || [];
+        const samples = accounts.slice(0, 5).map(a =>
+          `<li>${escapeHtml(a.platform)} / ${escapeHtml(a.display_name || a.username || a.handle || "")}</li>`
+        ).join("");
+        const diagText = diagnostics.length
+          ? `<p class="hint">诊断：${escapeHtml(diagnostics.slice(0, 3).map(d => d.message || d.source || d.platform || JSON.stringify(d)).join("；"))}</p>`
+          : "";
+        if (box) {
+          box.innerHTML = `
+            <strong>${data.ok === false ? "发现候选完成，但存在问题。" : "发现候选完成。"}</strong><br>
+            发现 ${data.discovered || 0} 个；新增候选 ${data.inserted_candidates || 0} 个；更新 ${data.updated || 0} 个。<br>
+            使用关键词：${escapeHtml((data.keywords_used || keywords || []).slice(0, 12).join("、") || "默认词条")}
+            ${samples ? `<ul>${samples}</ul>` : "<p class='hint'>没有匹配到新的候选账号。可以扩大关键词或选择全部平台。</p>"}
+            ${diagText}
+            <p class="hint">自动发现只写入候选库；候选账号可能已失效，核验后才进入主要分析。</p>
+          `;
+        }
+      });
+    }
+
+    // ══════════════════════════════════════
+    // Social media fetch
+    // ══════════════════════════════════════
+    function formatSocialDiagnostic(diag, prefix = "") {
+      const name = diag.platform || diag.source || "unknown";
+      const ok = diag.ok ? "可访问" : "失败";
+      const count = diag.post_count ?? diag.filtered_post_count ?? 0;
+      const status = diag.status_code ? `HTTP ${diag.status_code}` : "";
+      const filtered = diag.filtered_out ? `过滤 ${diag.filtered_out} 条非相关结果` : "";
+      const msg = diag.message || "";
+      let line = `${prefix}${name}：${ok}，结果 ${count} 条`;
+      if (status) line += `，${status}`;
+      if (filtered) line += `，${filtered}`;
+      if (msg) line += `，${msg}`;
+      const fallback = diag.fallback;
+      if (fallback) {
+        line += `\n${formatSocialDiagnostic(fallback, "  兜底 ")}`;
+      }
+      return line;
+    }
+
+    function formatSocialDiagnostics(diagnostics) {
+      if (!diagnostics?.length) return "无平台诊断信息。";
+      return diagnostics.map(d => formatSocialDiagnostic(d)).join("\n");
+    }
+
+    async function fetchSocialMedia(button) {
+      await withBusy(button, async () => {
+        const log = document.getElementById("socialLog");
+        const progressWrap = document.getElementById("socialProgress");
+        log.textContent = "开始社媒抓取...\n";
+        progressWrap.style.display = "block";
+
+        const platforms = [];
+        if (document.getElementById("socialTwitter").checked) platforms.push("twitter");
+        if (document.getElementById("socialInstagram").checked) platforms.push("instagram");
+        if (document.getElementById("socialYoutube").checked) platforms.push("youtube");
+        if (document.getElementById("socialReddit").checked) platforms.push("reddit");
+        if (document.getElementById("socialMastodon").checked) platforms.push("mastodon");
+        if (document.getElementById("socialRsshub").checked) platforms.push("rsshub");
+
+        const idStr = document.getElementById("socialAccountIds").value.trim();
+        const accountIds = idStr ? idStr.split(",").map(s => parseInt(s.trim())).filter(Boolean) : null;
+        const keywords = document.getElementById("socialKeywords").value
+          .split("\n").map(s => s.trim()).filter(Boolean);
+        log.textContent += `平台：${platforms.join("、") || "默认平台"}；每个平台/账号最大帖子数：${Number(document.getElementById("socialMaxPosts").value || 50)}。\n`;
+        log.textContent += "Twitter/X: Nitter RSS（无需登录）；Instagram: Instagrapi（需在 .env 设置 INSTAGRAM_USERNAME/INSTAGRAM_PASSWORD）。\n";
+
+        const res = await fetch("/japan/social/fetch/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: document.getElementById("socialStart").value,
+            end_date: document.getElementById("socialEnd").value,
+            platforms: platforms,
+            keywords: keywords,
+            include_verified_accounts: document.getElementById("socialIncludeVerifiedAccounts").checked,
+            account_ids: accountIds,
+            max_posts: Number(document.getElementById("socialMaxPosts").value || 50)
+          })
+        });
+        if (!res.ok || !res.body) throw new Error(await res.text());
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n"); buffer = lines.pop() || "";
+          for (const rawLine of lines) {
+            if (!rawLine.trim()) continue;
+            const evt = JSON.parse(rawLine);
+            if (evt.type === "stage") {
+              log.textContent += `\n── ${evt.message} ──\n`;
+              if (evt.total_platforms) {
+                document.getElementById("socialProgressCount").textContent = `0/${evt.total_platforms}`;
+                document.getElementById("socialProgressLabel").textContent = evt.stage === "keyword_search" ? "关键词检索" : "账号抓取";
+                document.getElementById("socialProgressBar").style.width = "0%";
+              }
+            } else if (evt.type === "platform_start") {
+              log.textContent += `  ⏳ ${evt.message}\n`;
+              document.getElementById("socialProgressCount").textContent = `${evt.index || 0}/${evt.total || "?"}`;
+              document.getElementById("socialProgressLabel").textContent = `搜索 ${evt.platform}`;
+              const pct = evt.total > 0 ? Math.round((evt.index - 1) / evt.total * 100) : 0;
+              document.getElementById("socialProgressBar").style.width = pct + "%";
+            } else if (evt.type === "platform_done") {
+              const icon = evt.ok ? "✅" : "⚠️";
+              log.textContent += `  ${icon} ${evt.platform}：${evt.post_count} 条`;
+              if (!evt.ok) log.textContent += ` (${evt.diagnostic?.message || "失败"})`;
+              log.textContent += "\n";
+              const pct = evt.total > 0 ? Math.round(evt.index / evt.total * 100) : 0;
+              document.getElementById("socialProgressBar").style.width = pct + "%";
+              document.getElementById("socialProgressCount").textContent = `${evt.index || 0}/${evt.total || "?"}`;
+            } else if (evt.type === "rate_limited") {
+              log.textContent += `  🚫 ${evt.platform}${evt.handle ? " " + evt.handle : ""}`;
+              if (evt.status_code) log.textContent += ` (HTTP ${evt.status_code})`;
+              if (evt.message) log.textContent += ` — ${evt.message}`;
+              log.textContent += "\n";
+            } else if (evt.type === "post") {
+              log.textContent += `    📄 ${evt.content_text?.slice(0,80) || evt.url}\n    来源：${evt.source || "?"} | 平台：${evt.platform}${evt.handle ? " " + evt.handle : ""} | 互动：${evt.engagement_count || 0}\n`;
+            } else if (evt.type === "progress") {
+              const pct = evt.total > 0 ? Math.round(evt.current / evt.total * 100) : 0;
+              document.getElementById("socialProgressBar").style.width = pct + "%";
+              document.getElementById("socialProgressCount").textContent = `${evt.current || 0}/${evt.total || "?"}`;
+              document.getElementById("socialProgressLabel").textContent = evt.message || "正在抓取...";
+              log.textContent += `  📌 ${evt.message}\n`;
+            } else if (evt.type === "done") {
+              if (evt.keywords?.length) log.textContent += `\n本轮关键词：${evt.keywords.join("、")}\n`;
+              log.textContent += `\n✅ 完成：${evt.fetched || 0} 条帖子；入库 ${evt.inserted || 0} 条，重复 ${evt.skipped_duplicates || 0} 条。\n`;
+              log.textContent += `\n平台诊断：\n${formatSocialDiagnostics(evt.diagnostics)}\n`;
+              if (!(evt.fetched || 0)) {
+                log.textContent += "\n⚠️ 没有抓取到入库帖子。\n";
+                log.textContent += "  • Twitter 关键词搜索受限（Nitter 不支持搜索 RSS），建议勾选「同时抓取已核验账号」直接抓取账号时间线。\n";
+                log.textContent += "  • 日文关键词可能无法被 Bing/Google 搜索索引。\n";
+                log.textContent += "  • Instagram 需先运行 python ig_login.py 登录一次。\n";
+              }
+              document.getElementById("socialProgressBar").style.width = "100%";
+              document.getElementById("socialProgressLabel").textContent = "完成";
+            } else if (evt.type === "error") {
+              log.textContent += `\n❌ 错误：${evt.message}\n`;
+            } else {
+              log.textContent += `${evt.type}: ${evt.message || ""}\n`;
+            }
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+        progressWrap.style.display = "none";
+      });
+    }
+
+    // ══════════════════════════════════════
+    // Scraped content
+    // ══════════════════════════════════════
+    async function loadScrapedContent() {
+      try {
+        const params = new URLSearchParams();
+        const start = document.getElementById("scrapedStart").value;
+        const end = document.getElementById("scrapedEnd").value;
+        const type = document.getElementById("scrapedType").value;
+        const platform = document.getElementById("scrapedPlatform").value;
+        const keyword = document.getElementById("scrapedKeyword").value.trim();
+        if (start) params.set("start_date", start);
+        if (end) params.set("end_date", end);
+        if (type) params.set("type", type);
+        if (platform) params.set("platform", platform);
+        if (keyword) params.set("keyword", keyword);
+        params.set("limit", "100");
+
+        const data = await request(`/api/japan/contents?${params.toString()}`);
+        const items = data.items || [];
+        const list = document.getElementById("scrapedList");
+        if (!items.length) { list.innerHTML = "<p class='hint'>暂无已抓取内容。</p>"; return; }
+
+        list.innerHTML = items.map(item => `
+          <div class="content-item">
+            <span class="title">${escapeHtml(item.title || item.content_text?.slice(0,60) || "无标题")}</span>
+            <div class="meta">${escapeHtml(item.source_type || item.platform || "")} | ${escapeHtml(item.source_name || item.account_name || "")} | ${escapeHtml(item.published_at || "")}</div>
+            <div class="meta">分类：${escapeHtml(item.category || "一般")} | 情感：${escapeHtml(item.sentiment || "未分析")}</div>
+          </div>
+        `).join("");
+      } catch (err) {
+        document.getElementById("scrapedList").textContent = "加载失败：" + (err.message || err);
+      }
+    }
+
+    async function loadEvents() {
+      try {
+        const start = document.getElementById("scrapedStart").value;
+        const end = document.getElementById("scrapedEnd").value;
+        const params = new URLSearchParams();
+        if (start) params.set("start_date", start);
+        if (end) params.set("end_date", end);
+        params.set("limit", "50");
+
+        const data = await request(`/api/japan/events?${params.toString()}`);
+        const events = data.events || [];
+        const list = document.getElementById("eventsList");
+        if (!events.length) { list.innerHTML = "<p class='hint'>暂无记录的反战事件。</p>"; return; }
+
+        list.innerHTML = events.map(evt => `
+          <div class="content-item">
+            <span class="title">${escapeHtml(evt.title)}</span>
+            <div class="meta">${escapeHtml(evt.event_date || "")} | ${escapeHtml(evt.location || "")} | 组织者：${escapeHtml(evt.organizer || "")}</div>
+            <div class="meta">类别：${escapeHtml(evt.category || "")} | ${evt.verified ? "已核验" : "待核验"}</div>
+          </div>
+        `).join("");
+      } catch (err) {
+        document.getElementById("eventsList").textContent = "事件加载失败：" + (err.message || err);
+      }
+    }
+
+    // ══════════════════════════════════════
+    // AI Analysis
+    // ══════════════════════════════════════
+    function setAnalysisRange(days) {
+      const end = new Date();
+      const start = new Date(Date.now() - days * 86400000);
+      document.getElementById("analysisStart").value = fmt(start);
+      document.getElementById("analysisEnd").value = fmt(end);
+    }
+
+    function setAnalysisQuarter(which) {
+      const now = new Date();
+      const q = Math.floor(now.getMonth() / 3);
+      let startMonth, endMonth;
+      if (which === "current") { startMonth = q * 3; endMonth = startMonth + 3; }
+      else { startMonth = (q - 1) * 3; if (startMonth < 0) startMonth += 12; endMonth = startMonth + 3; }
+      const year = which === "last" && q === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const start = new Date(year, startMonth, 1);
+      const end = new Date(year, endMonth, 0);
+      document.getElementById("analysisStart").value = fmt(start);
+      document.getElementById("analysisEnd").value = fmt(end);
+    }
+
+    async function runJapanAnalysis(button) {
+      await withBusy(button, async () => {
+        const log = document.getElementById("analysisLog");
+        log.textContent = "开始 AI 分析...\n";
+        const res = await fetch("/japan/analyze/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: document.getElementById("analysisStart").value,
+            end_date: document.getElementById("analysisEnd").value,
+            include_social: document.getElementById("analysisIncludeSocial").checked,
+            include_news: document.getElementById("analysisIncludeNews").checked,
+            include_events: document.getElementById("analysisIncludeEvents").checked
+          })
+        });
+        if (!res.ok || !res.body) throw new Error(await res.text());
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n"); buffer = lines.pop() || "";
+          for (const rawLine of lines) {
+            if (!rawLine.trim()) continue;
+            const evt = JSON.parse(rawLine);
+            handleAnalysisEvent(evt, log);
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+        if (buffer.trim()) { handleAnalysisEvent(JSON.parse(buffer), log); }
+        await loadJapanReports();
+      });
+    }
+
+    function handleAnalysisEvent(evt, log) {
+      switch (evt.type) {
+        case "start":
+          log.textContent += `开始分析：${evt.start_date} 至 ${evt.end_date}\n`;
+          break;
+        case "stage":
+          log.textContent += `${evt.message}\n`;
+          break;
+        case "articles_loaded":
+          log.textContent += `已加载 ${evt.count || 0} 条内容。\n`;
+          break;
+        case "structured_ready":
+          log.textContent += `结构化完成：事件 ${evt.event_count || 0} 个，主题 ${evt.topic_count || 0} 个。\n`;
+          if (evt.top_topics?.length) {
+            log.textContent += `主要主题：${evt.top_topics.map(t => t.topic_name).join("、")}\n`;
+          }
+          // Update map
+          if (evt.map_points?.length) updateMapPoints(evt.map_points);
+          // Update timeline
+          if (evt.timeline?.length) updateTimeline(evt.timeline);
+          break;
+        case "llm_start":
+          log.textContent += `AI 撰写中... ${evt.summary || ""}\n`;
+          break;
+        case "heartbeat":
+          log.textContent += `已等待 ${evt.elapsed_seconds} 秒... ${evt.summary || ""}\n`;
+          break;
+        case "llm_done":
+          log.textContent += `AI 分析完成。\n`;
+          break;
+        case "done":
+          log.textContent += `报告已保存：${evt.report_path || evt.title || ""}\n`;
+          break;
+        case "error":
+          log.textContent += `错误：${evt.message}\n`;
+          break;
+        default:
+          log.textContent += `${evt.type}: ${evt.message || JSON.stringify(evt)}\n`;
+      }
+    }
+
+    function updateMapPoints(points) {
+      const container = document.getElementById("mapPoints");
+      const colors = { antiwar: "#155eef", base: "#c0392b", event: "#e67e22" };
+      container.innerHTML = points.map(p => `
+        <div class="map-point">
+          <span class="map-dot" style="background:${colors[p.category] || "#155eef"};"></span>
+          <strong>${escapeHtml(p.location)}</strong> — ${escapeHtml(p.description || p.label || "")}
+          <span style="margin-left:auto;font-size:11px;color:#667085;">${escapeHtml(p.count ? p.count + "件" : "")}</span>
+        </div>
+      `).join("");
+    }
+
+    function updateTimeline(items) {
+      const container = document.getElementById("timeline");
+      container.innerHTML = items.map(t => `
+        <div class="timeline-item">
+          <span class="timeline-date">${escapeHtml(t.date || "")}</span>
+          <div>${escapeHtml(t.title || t.description || "")}</div>
+          ${t.source ? `<div style="font-size:11px;color:#667085;">来源：${escapeHtml(t.source)}</div>` : ""}
+        </div>
+      `).join("");
+    }
+
+    async function loadJapanReports() {
+      try {
+        const data = await request("/api/japan/reports");
+        const box = document.getElementById("japanReports");
+        const reports = data.reports || [];
+        if (!reports.length) { box.innerHTML = "尚未生成报告。"; return; }
+        box.innerHTML = reports.map(r =>
+          `<a href="/japan/reports/${encodeURIComponent(r.name || r.filename)}" download>${escapeHtml(r.title || r.name)} (${escapeHtml(r.period_start||"")} ~ ${escapeHtml(r.period_end||"")})</a>`
+        ).join("");
+      } catch (err) {
+        document.getElementById("japanReports").textContent = "加载报告失败。";
+      }
+    }
+
+    // ══════════════════════════════════════
+    // Deep research tasks
+    // ══════════════════════════════════════
+    async function createResearchTask(button) {
+      await withBusy(button, async () => {
+        let params = {};
+        try {
+          const raw = document.getElementById("researchParams").value.trim();
+          if (raw) params = JSON.parse(raw);
+        } catch { throw new Error("参数 JSON 格式错误"); }
+        await request("/api/japan/research-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            task_type: document.getElementById("researchType").value,
+            params: params
+          })
+        });
+        await pollResearchTasks();
+      });
+    }
+
+    async function pollResearchTasks() {
+      try {
+        const data = await request("/api/japan/research-tasks?limit=20");
+        const tasks = data.tasks || [];
+        const container = document.getElementById("researchTasks");
+        if (!tasks.length) { container.innerHTML = "暂无研究任务。"; return; }
+        const statusCls = { pending: "task-pending", running: "task-running", completed: "task-done", failed: "task-failed" };
+        const statusLabel = { pending: "等待中", running: "进行中", completed: "已完成", failed: "失败" };
+        container.innerHTML = tasks.map(t => `
+          <div class="task-item">
+            <span style="font-weight:650;">${escapeHtml(t.task_type)}</span>
+            <span style="font-size:12px;color:#667085;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(JSON.stringify(t.params || {}))}</span>
+            <span class="task-status ${statusCls[t.status] || "task-pending"}">${statusLabel[t.status] || t.status}</span>
+            <span style="font-size:11px;color:#667085;">${escapeHtml(t.created_at || "")}</span>
+            ${t.status === "completed" ? `<button class="small secondary" onclick="viewResearchResult(${t.id})">查看结果</button>` : ""}
+            ${t.status === "pending" || t.status === "running" ? "" : `<button class="small danger" onclick="deleteResearchTask(${t.id})">删除</button>`}
+          </div>
+        `).join("");
+
+        // Auto-poll if any tasks are running
+        if (tasks.some(t => t.status === "pending" || t.status === "running")) {
+          setTimeout(pollResearchTasks, 5000);
+        }
+      } catch (err) {
+        document.getElementById("researchTasks").textContent = "加载失败：" + (err.message || err);
+      }
+    }
+
+    async function viewResearchResult(id) {
+      try {
+        const data = await request(`/api/japan/research-tasks/${id}`);
+        const t = data.task || {};
+        const result = t.result ? JSON.stringify(t.result, null, 2) : "无结果";
+        document.getElementById("analysisLog").textContent =
+          `研究任务 #${id}: ${t.task_type}\n状态：${t.status}\n参数：${JSON.stringify(t.params)}\n结果：\n${result}`;
+      } catch (err) { console.error(err); }
+    }
+
+    async function deleteResearchTask(id) {
+      try {
+        await request(`/api/japan/research-tasks/${id}`, { method: "DELETE" });
+        await pollResearchTasks();
+      } catch (err) { console.error(err); }
+    }
+
+    // ══════════════════════════════════════
+    // Init
+    // ══════════════════════════════════════
+    showMainTab("retrieval");
+    checkHealth();
+    refreshInstagramLoginStatus(null);
+    loadJapanReports();
+  </script>
+</body>
+</html>

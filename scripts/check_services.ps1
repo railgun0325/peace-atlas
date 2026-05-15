@@ -1,12 +1,13 @@
 $ErrorActionPreference = "Continue"
 
 $services = @(
-  @{ Name = "n8n"; Url = "http://localhost:5678" },
-  @{ Name = "FreshRSS"; Url = "http://localhost:8081" },
-  @{ Name = "RSSHub"; Url = "http://localhost:1200" },
-  @{ Name = "changedetection.io"; Url = "http://localhost:5000" },
-  @{ Name = "Qdrant"; Url = "http://localhost:6333/healthz" },
-  @{ Name = "analysis-worker"; Url = "http://localhost:8090/health" }
+  @{ Name = "n8n"; Url = "http://localhost:5782" },
+  @{ Name = "FreshRSS"; Url = "http://localhost:18181" },
+  @{ Name = "RSSHub"; Url = "http://localhost:1210" },
+  @{ Name = "changedetection.io"; Url = "http://localhost:15100" },
+  @{ Name = "Qdrant"; Url = "http://localhost:6433/healthz" },
+  @{ Name = "analysis-worker"; Url = "http://localhost:18090/health" },
+  @{ Name = "Instagram login helper"; Url = "http://localhost:18190/health" }
 )
 
 foreach ($service in $services) {

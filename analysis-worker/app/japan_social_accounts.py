@@ -6,6 +6,7 @@ from typing import Any
 
 import yaml
 
+from .account_discovery import DEFAULT_PUBLIC_DISCOVERY_KEYWORDS, discover_public_candidates
 from .db import fetch_all, fetch_one, get_conn
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -61,6 +62,22 @@ DEFAULT_DISCOVERY_KEYWORDS = [
     "Peace Boat",
     "Article 9",
 ]
+DEFAULT_DISCOVERY_KEYWORDS = list(dict.fromkeys([
+    *DEFAULT_DISCOVERY_KEYWORDS,
+    *DEFAULT_PUBLIC_DISCOVERY_KEYWORDS,
+    "日本 反戦 団体 Instagram",
+    "日本 平和運動 Instagram",
+    "憲法9条 団体 Instagram",
+    "沖縄 基地反対 Instagram",
+    "Peace Boat Instagram",
+    "九条の会 Instagram",
+    "反戦デモ Instagram",
+    "平和団体 インスタ",
+    "護憲 団体 インスタ",
+    "Japan antiwar Instagram",
+    "Japan peace movement Instagram",
+    "Okinawa base protest Instagram",
+]))
 
 
 def _now() -> str:
@@ -289,6 +306,30 @@ def discover_candidate(
     )
 
 
+def _save_account_source(account_id: int, source_type: str, source_detail: str) -> None:
+    source_type = (source_type or "manual").strip() or "manual"
+    source_detail = (source_detail or "").strip()
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM japan_social_account_sources
+                WHERE account_id = %s AND source_type = %s AND COALESCE(source_detail, '') = %s
+                LIMIT 1
+                """,
+                (account_id, source_type, source_detail),
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    """
+                    INSERT INTO japan_social_account_sources (account_id, source_type, source_detail, added_at)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (account_id, source_type, source_detail or None, _now()),
+                )
+
+
 def verify_account(account_id: int, verified: bool = True, evidence_url: str | None = None) -> dict[str, Any]:
     """Manually promote an account from candidate/seed to verified."""
     status = "verified" if verified else "rejected"
@@ -439,11 +480,7 @@ async def discover_japan_social_accounts(
     category: str | None = None,
     max_accounts: int = 20,
 ) -> dict[str, Any]:
-    """Seed candidate accounts from the curated YAML list.
-
-    This intentionally does not search private graphs or login-only pages. It
-    turns matching seed entries into candidate rows with evidence URLs.
-    """
+    """Discover candidate accounts from seed list plus public web sources."""
     discovered: list[dict[str, Any]] = []
     inserted_candidates = 0
     updated = 0
@@ -492,6 +529,7 @@ async def discover_japan_social_accounts(
             }
         if result.get("ok"):
             discovered.append(result["account"])
+            _save_account_source(result["account"]["id"], "seed_discovery", evidence_url)
             if before:
                 updated += 1
             else:
@@ -499,12 +537,70 @@ async def discover_japan_social_accounts(
         if len(discovered) >= max_accounts:
             break
 
+    remaining_slots = max(0, max_accounts - len(discovered))
+    public_accounts: list[dict[str, Any]] = []
+    if remaining_slots > 0:
+        public_candidates, public_diag = await discover_public_candidates(
+            effective_keywords,
+            max_requests=max(4, min(20, len(effective_keywords) * 2)),
+        )
+        diagnostics.extend(public_diag)
+        for item in public_candidates:
+            if len(public_accounts) >= remaining_slots:
+                break
+            before = list_accounts(platform=item.platform, search=item.handle, limit=1)
+            if before:
+                diagnostics.append(
+                    {
+                        "ok": True,
+                        "stage": "dedupe",
+                        "platform": item.platform,
+                        "handle": item.handle,
+                        "reason": "existing_account_will_be_updated",
+                    }
+                )
+            result = discover_candidate(
+                platform=item.platform,
+                handle=item.handle,
+                account_name=item.handle.lstrip("@"),
+                category=item.category,
+                url=item.profile_url,
+                language="ja",
+                evidence_url=item.evidence_url,
+                discovery_method="public_discovery",
+                note=f"verification_status={item.verification_status}",
+            )
+            if not result.get("ok"):
+                diagnostics.append(
+                    {
+                        "ok": False,
+                        "stage": "upsert",
+                        "platform": item.platform,
+                        "handle": item.handle,
+                        "reason": result.get("error", "unknown"),
+                    }
+                )
+                continue
+            _save_account_source(result["account"]["id"], item.source_type, f"{item.source_detail} | {item.evidence_url}")
+            public_accounts.append(result["account"])
+            if before:
+                updated += 1
+            else:
+                inserted_candidates += 1
+
+    all_discovered = discovered + public_accounts
+
     return {
         "ok": True,
-        "discovered": len(discovered),
+        "discovered": len(all_discovered),
         "inserted_candidates": inserted_candidates,
         "updated": updated,
-        "accounts": discovered,
+        "accounts": all_discovered,
         "diagnostics": diagnostics,
         "keywords_used": effective_keywords,
+        "source_write_contract": {
+            "table": "japan_social_account_sources",
+            "fields": ["account_id", "source_type", "source_detail", "added_at"],
+            "dedupe_key": "account_id + source_type + source_detail",
+        },
     }

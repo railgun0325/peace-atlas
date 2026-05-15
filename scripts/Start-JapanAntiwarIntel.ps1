@@ -6,9 +6,13 @@ Add-Type -AssemblyName System.Drawing
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Distro = "Ubuntu-OpenClaw"
 $ProxyBridgePort = 17897
+$LocalAppPort = 18090
+$WslAppPort = 8190
+$InstagramLoginHelperPort = 18190
 $script:KeepAliveProcess = $null
 $script:PortBridgeProcess = $null
-$script:LastUrl = "http://127.0.0.1:8190"
+$script:InstagramLoginHelperProcess = $null
+$script:LastUrl = "http://127.0.0.1:$LocalAppPort"
 $script:LogPath = Join-Path $ProjectRoot "launcher.log"
 
 function Add-Log {
@@ -147,7 +151,12 @@ function Get-WslIp {
 function Stop-OldJapanPortBridge {
     Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -match "windows_port_bridge.py" -and
-        ($_.CommandLine -match "8190:8090" -or $_.CommandLine -match "8190:8190" -or $_.CommandLine -match "--ports .*8190")
+        (
+            $_.CommandLine -match "8190:8090" -or
+            $_.CommandLine -match "8190:8190" -or
+            $_.CommandLine -match "18090:8190" -or
+            $_.CommandLine -match "--ports .*8190"
+        )
     } | ForEach-Object {
         try {
             Add-Log "Stopping stale Japan localhost bridge pid $($_.ProcessId)..."
@@ -180,7 +189,22 @@ function Start-WindowsPortBridge {
         "scripts\windows_port_bridge.py",
         "--listen-host", "127.0.0.1",
         "--target-host", $wslIp,
-        "--ports", "8181", "1210", "15100", "6433", "5782", "8190"
+        "--ports", "1210", "15100", "6433", "5782",
+        "--map", "$LocalAppPort`:$WslAppPort", "18181:8181"
+    ) -WorkingDirectory $ProjectRoot -PassThru
+    Start-Sleep -Seconds 1
+}
+
+function Start-InstagramLoginHelper {
+    if (Test-Port $InstagramLoginHelperPort) {
+        Add-Log "Instagram login helper is already running on $InstagramLoginHelperPort."
+        return
+    }
+    Add-Log "Starting Instagram login helper..."
+    $script:InstagramLoginHelperProcess = Start-Process -WindowStyle Hidden -FilePath "python" -ArgumentList @(
+        "scripts\instagram_login_helper.py",
+        "--project-root", $ProjectRoot,
+        "--port", "$InstagramLoginHelperPort"
     ) -WorkingDirectory $ProjectRoot -PassThru
     Start-Sleep -Seconds 1
 }
@@ -189,13 +213,13 @@ function Wait-Health {
     Add-Log "Waiting for analysis service..."
     for ($i = 1; $i -le 45; $i++) {
         try {
-            $result = Invoke-RestMethod -Uri "http://127.0.0.1:8190/health" -TimeoutSec 3
-            if ($result.ok) { return "http://127.0.0.1:8190" }
+            $result = Invoke-RestMethod -Uri "http://127.0.0.1:$LocalAppPort/health" -TimeoutSec 3
+            if ($result.ok) { return "http://127.0.0.1:$LocalAppPort" }
         } catch {}
         Start-Sleep -Seconds 2
     }
     $wslIp = Get-WslIp
-    return "http://$($wslIp):8190"
+    return "http://$($wslIp):$WslAppPort"
 }
 
 function Start-System {
@@ -208,6 +232,7 @@ function Start-System {
         Configure-DockerProxy
         Start-Compose
         Start-WindowsPortBridge
+        Start-InstagramLoginHelper
         $script:LastUrl = Wait-Health
         Add-Log "System is ready: $script:LastUrl"
         Start-Process $script:LastUrl
@@ -233,6 +258,9 @@ docker compose stop
         }
         if ($script:PortBridgeProcess -and -not $script:PortBridgeProcess.HasExited) {
             try { $script:PortBridgeProcess.Kill() } catch {}
+        }
+        if ($script:InstagramLoginHelperProcess -and -not $script:InstagramLoginHelperProcess.HasExited) {
+            try { $script:InstagramLoginHelperProcess.Kill() } catch {}
         }
         Stop-OldJapanPortBridge
         Add-Log "Stopped."

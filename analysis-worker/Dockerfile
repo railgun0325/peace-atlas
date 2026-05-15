@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV DOCKER_ENV=1
 
 WORKDIR /app
 
@@ -10,11 +11,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY config ./config
+RUN mkdir -p /app/data /app/reports
 
-# ── 可选: Playwright + Chromium (Instagram 浏览器模拟，封号风险低) ──
-# 取消下面注释来安装 Playwright 浏览器（镜像增加 ~500MB）:
-# RUN playwright install chromium --with-deps
-# ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+# Optional: install Chromium runtime for Playwright during image build.
+# Enabled with --build-arg PLAYWRIGHT_INSTALL_CHROMIUM=true
+# Tradeoff: larger image, but full Playwright flow works in container.
+ARG PLAYWRIGHT_INSTALL_CHROMIUM=false
+RUN if [ "$PLAYWRIGHT_INSTALL_CHROMIUM" = "true" ]; then playwright install chromium --with-deps; fi
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 EXPOSE 8090
 

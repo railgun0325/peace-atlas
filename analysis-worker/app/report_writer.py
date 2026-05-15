@@ -9,8 +9,8 @@ from .sentiment import SENTIMENT_DISPLAY, SENTIMENT_ORDER, sentiment_profile_fro
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-VISUAL_MARKER_START = "<!-- tpi-visual-signals-start -->"
-VISUAL_MARKER_END = "<!-- tpi-visual-signals-end -->"
+VISUAL_MARKER_START = "<!-- jai-visual-signals-start -->"
+VISUAL_MARKER_END = "<!-- jai-visual-signals-end -->"
 
 
 def reports_dir() -> Path:
@@ -26,7 +26,7 @@ def reports_dir() -> Path:
 
 
 def report_filename(start_date: str) -> str:
-    return f"taiwan-politics-weekly-{start_date}.md"
+    return f"japan-antiwar-weekly-{start_date}.md"
 
 
 def write_report(markdown: str, start_date: str) -> Path:
@@ -50,14 +50,14 @@ def fallback_report(start_date: str, end_date: str, structured: dict[str, Any], 
     top_judgments = _top_judgments(clusters, topic_changes)
     return "\n".join(
         [
-            f"# 台湾政治动向周报：{start_date} 至 {end_date}",
+            f"# 日本反戦平和運動公開情報週報：{start_date} 至 {end_date}",
             "",
             "## 1. 一页纸结论",
             f"- 本报告使用本地 fallback 生成：{reason}",
-            f"- 本周政治温度：{temperature}。该判断来自本周与过去 4 周主题数量对比；若历史样本不足，则不足以判断。",
+            f"- 本周态势评估：{temperature or '不足以判断'}。该判断来自本周与过去 4 周主题数量对比；若历史样本不足，则不足以判断。",
             *top_judgments,
             "",
-            "## 2. 本周关键事件时间线",
+            "## 2. 本周反戦關鍵事件时间线",
             *_timeline(clusters),
             "",
             "### 事件簇表",
@@ -76,10 +76,10 @@ def fallback_report(start_date: str, end_date: str, structured: dict[str, Any], 
             "### 实体出现频次表",
             *_entity_table(entity_changes),
             "",
-            *_actor_lines(entity_changes),
+            *_japan_actor_lines(entity_changes),
             "",
-            "## 6. 两岸、国防、外交专章",
-            *_chapter_lines(clusters, ["两岸", "国防", "外交"]),
+            "## 6. 憲法第九条・自衛隊・在日米軍専章",
+            *_japan_chapter_lines(clusters, ["憲法9条", "憲法改正", "自衛隊", "在日米軍", "沖縄", "安保", "平和"]),
             "",
             "## 7. 媒体与叙事差异",
             "### 来源覆盖情况",
@@ -103,7 +103,7 @@ def fallback_report(start_date: str, end_date: str, structured: dict[str, Any], 
             "",
             "## 9. 下周观察清单",
             "- 是否有官方来源补充确认本周争议事件。",
-            "- 立法院、总统府、行政院、国防部、外交部、陆委会是否发布后续说明。",
+            "- 国会、外務省、防衛省、内閣府是否发布后续说明。",
             "- 同一事件是否获得通讯社、不同立场媒体与国际媒体交叉报道。",
             "",
             "## 10. 风险与不确定性",
@@ -241,7 +241,7 @@ def _entity_table(entity_changes: list[dict[str, Any]]) -> list[str]:
 
 
 def _actor_lines(entity_changes: list[dict[str, Any]]) -> list[str]:
-    required = ["民进党", "国民党", "民众党", "总统府", "行政院", "立法院", "司法/检调"]
+    required = ["自民党", "立憲民主党", "公明党", "共産党", "内閣府", "国会", "防衛省"]
     lines = []
     by_name = {item["entity_name"]: item for item in entity_changes}
     for name in required:
@@ -260,7 +260,7 @@ def _chapter_lines(clusters: list[dict[str, Any]], chapter_topics: list[str]) ->
         if any(topic in chapter_topics for topic in cluster.get("dominant_topics", []))
     ]
     if not selected:
-        return ["- 本周两岸、国防、外交相关样本不足以判断。"]
+        return ["- 本周相关主题样本不足以判断。"]
     return [
         f"- {cluster['representative_title']}：主题 {', '.join(cluster.get('dominant_topics') or [])}，证据等级 {cluster.get('evidence_grade', 'C')}。"
         for cluster in selected[:8]
@@ -412,16 +412,18 @@ def _cluster_icon(cluster: dict[str, Any]) -> str:
     text = " ".join([cluster.get("representative_title") or "", *[str(topic) for topic in cluster.get("dominant_topics") or []]]).lower()
     rules = [
         (["国防", "國防", "military", "defense", "军购", "軍購"], "🛡️"),
-        (["两岸", "兩岸", "台海", "taiwan strait", "cross-strait"], "🌊"),
-        (["外交", "diplomacy", "国际", "國際"], "🌐"),
-        (["立法院", "legislature", "parliament"], "🏛️"),
-        (["选举", "選舉", "民调", "民調", "election", "poll"], "🗳️"),
-        (["政党", "政黨", "民进党", "民進黨", "国民党", "國民黨", "民众党", "民眾黨"], "⚔️"),
-        (["司法", "检调", "檢調", "社会", "社會"], "⚖️"),
-        (["经济", "經濟", "产业", "產業", "台积电", "台積電", "tsmc"], "💹"),
-        (["能源", "核电", "核電"], "⚡"),
-        (["总统府", "總統府", "行政院", "government"], "🏢"),
-        (["媒体", "媒體", "international media"], "📰"),
+        (["平和", "peace", "反戦", "antiwar", "pacifism", "constitution", "憲法", "article 9"], "🕊️"),
+        (["沖縄", "okinawa", "基地", "base", "futenma", "henoko", "辺野古", "普天間"], "🏝️"),
+        (["外交", "diplomacy", "国際", "国际"], "🌐"),
+        (["国会", "legislature", "parliament", "diet"], "🏛️"),
+        (["選挙", "选举", "election", "poll", "世論"], "🗳️"),
+        (["政党", "自民党", "立憲", "共産党", "公明党", "ldp", "cdp"], "⚔️"),
+        (["核", "nuclear", "被爆", "hibakusha", "廃絶", "disarmament"], "☢️"),
+        (["経済", "经济", "産業", "产业"], "💹"),
+        (["安保", "security", "同盟", "alliance", "日米"], "🤝"),
+        (["防衛", "defense", "military", "自衛隊", "国防", "軍事"], "🛡️"),
+        (["内閣", "政府", "government", "外務省", "防衛省"], "🏢"),
+        (["メディア", "媒体", "media", "報道", "journalism"], "📰"),
     ]
     for needles, icon in rules:
         if any(needle.lower() in text for needle in needles):

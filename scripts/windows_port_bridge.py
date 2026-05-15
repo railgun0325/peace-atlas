@@ -68,7 +68,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--listen-host", default="127.0.0.1")
     parser.add_argument("--target-host", required=True)
-    parser.add_argument("--ports", nargs="+", type=int, required=True)
+    parser.add_argument("--ports", nargs="*", type=int, default=[])
     parser.add_argument(
         "--map",
         nargs="*",
@@ -77,6 +77,8 @@ def main() -> None:
         help="Additional local-to-target port mappings, for example 5682:5678.",
     )
     args = parser.parse_args()
+    if not args.ports and not args.map:
+        parser.error("at least one --ports value or --map mapping is required")
 
     for port in args.ports:
         threading.Thread(

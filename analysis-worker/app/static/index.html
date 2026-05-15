@@ -218,7 +218,7 @@
       <h2>服务入口</h2>
       <div class="service-links">
         <a href="http://127.0.0.1:5782" target="_blank" rel="noreferrer">n8n 自动化</a>
-        <a href="http://127.0.0.1:8181" target="_blank" rel="noreferrer">FreshRSS</a>
+        <a href="http://127.0.0.1:18181" target="_blank" rel="noreferrer">FreshRSS</a>
         <a href="http://127.0.0.1:1210" target="_blank" rel="noreferrer">RSSHub</a>
         <a href="http://127.0.0.1:15100" target="_blank" rel="noreferrer">网页变化监控</a>
         <a href="http://127.0.0.1:6433/dashboard" target="_blank" rel="noreferrer">Qdrant</a>
@@ -426,6 +426,17 @@ Peace Boat
 Article 9
 Japan peace movement</textarea>
           <label><input type="checkbox" id="socialIncludeVerifiedAccounts" /> 同时抓取已核验账号公开内容</label>
+          <div class="detail-box">
+            <strong>Instagram 登录状态</strong>
+            <p class="hint" id="igLoginStatus">尚未检查。</p>
+            <div class="actions">
+              <button class="small secondary" onclick="refreshInstagramLoginStatus(this)">检查状态</button>
+              <button class="small success" onclick="startInstagramLogin(this,false)">登录/续登</button>
+              <button class="small secondary" onclick="startInstagramLogin(this,true)">更换账号</button>
+              <button class="small danger" onclick="clearInstagramLogin(this)">清除会话</button>
+            </div>
+            <p class="hint">登录窗口只用于保存你自己的 Instagram 会话；抓取仍受低频限制。更换账号会先清除旧会话。</p>
+          </div>
           <label>指定账号 ID（逗号分隔；填写后会额外抓取这些账号）</label>
           <input id="socialAccountIds" placeholder="1,2,3" />
           <label>每个平台/账号最大帖子数</label>
@@ -654,6 +665,92 @@ Japan peace movement</textarea>
     // ══════════════════════════════════════
     function wait(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    const IG_LOGIN_HELPER = "http://127.0.0.1:18190";
+
+    function setInstagramLoginStatus(message) {
+      const box = document.getElementById("igLoginStatus");
+      if (box) box.textContent = message;
+    }
+
+    async function helperJson(path, options = {}) {
+      const res = await fetch(`${IG_LOGIN_HELPER}${path}`, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      });
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!res.ok) throw new Error(data.message || text || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function refreshInstagramLoginStatus(button) {
+      await withBusy(button, async () => {
+        try {
+          const data = await request("/admin/instagram/session");
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+        } catch (err) {
+          setInstagramLoginStatus(`检查失败：${err.message || err}`);
+        }
+      });
+    }
+
+    async function pollInstagramLoginStatus() {
+      for (let i = 0; i < 180; i++) {
+        await wait(2000);
+        try {
+          const data = await helperJson("/instagram/login/status");
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+          if (data.status === "login_saved" || data.status === "login_not_completed" || data.status === "helper_error") {
+            await refreshInstagramLoginStatus(null);
+            return;
+          }
+        } catch {
+          return;
+        }
+      }
+    }
+
+    async function startInstagramLogin(button, forceReset) {
+      if (forceReset && !confirm("更换账号会清除当前保存的 Instagram 会话，然后打开登录窗口。继续？")) return;
+      await withBusy(button, async () => {
+        setInstagramLoginStatus(forceReset ? "正在准备更换账号..." : "正在打开登录窗口...");
+        let data = null;
+        try {
+          data = await request(`/admin/instagram/login/start?force_reset=${forceReset ? "true" : "false"}`, { method: "POST" });
+        } catch (err) {
+          data = { ok: false, status: "backend_error", message: err.message || String(err) };
+        }
+        if (data.ok) {
+          setInstagramLoginStatus(data.message || "登录窗口正在打开。");
+          return;
+        }
+        try {
+          const helper = await helperJson(`/instagram/login/start?force_reset=${forceReset ? "true" : "false"}`, { method: "POST" });
+          setInstagramLoginStatus(helper.message || "登录窗口正在打开。请在弹出的浏览器里完成登录。");
+          pollInstagramLoginStatus();
+        } catch (err) {
+          setInstagramLoginStatus(`无法打开登录助手：${err.message || err}。请先运行 scripts\\Start-InstagramLoginHelper.ps1，或用一键启动器重新启动系统。`);
+        }
+      });
+    }
+
+    async function clearInstagramLogin(button) {
+      if (!confirm("确认清除已保存的 Instagram 登录状态？")) return;
+      await withBusy(button, async () => {
+        try {
+          let data;
+          try {
+            data = await helperJson("/instagram/session/clear", { method: "POST" });
+          } catch {
+            data = await request("/admin/instagram/session/clear", { method: "POST" });
+          }
+          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+        } catch (err) {
+          setInstagramLoginStatus(`清除失败：${err.message || err}`);
+        }
+      });
     }
 
     async function shutdownBackend(button) {
@@ -1357,6 +1454,7 @@ Japan peace movement</textarea>
     // ══════════════════════════════════════
     showMainTab("retrieval");
     checkHealth();
+    refreshInstagramLoginStatus(null);
     loadJapanReports();
   </script>
 </body>

@@ -13,130 +13,98 @@ from dateutil import parser
 GDELT_DOC_API = "https://api.gdeltproject.org/api/v2/doc/doc"
 DEFAULT_SEARCH_TOPICS = [
     {
-        "topic": "总统府/行政院",
-        "gdelt": 'Taiwan AND ("President Lai" OR "Executive Yuan" OR cabinet OR government)',
+        "topic": "憲法九条/平和主義",
+        "gdelt": 'Japan AND ("Article 9" OR pacifism OR "peace constitution")',
         "queries": {
-            "zh-Hant": "賴清德 總統府 行政院",
-            "zh-Hans": "赖清德 总统府 行政院 台湾",
-            "ja": "台湾 頼清徳 行政院",
-            "en": "Taiwan President Lai Executive Yuan",
+            "ja": "憲法九条 平和主義 日本国憲法",
+            "en": "Japan Article 9 pacifism peace constitution",
+            "zh-Hans": "日本 宪法第九条 和平主义",
         },
     },
     {
-        "topic": "立法院",
-        "gdelt": 'Taiwan AND ("Legislative Yuan" OR legislature OR parliament OR budget)',
+        "topic": "米軍基地/沖縄",
+        "gdelt": 'Japan AND (Okinawa AND ("US base" OR "military base" OR Futenma OR Henoko))',
         "queries": {
-            "zh-Hant": "台灣 立法院 預算 法案",
-            "zh-Hans": "台湾 立法院 预算 法案",
-            "ja": "台湾 立法院 予算",
-            "en": "Taiwan legislature budget bill",
+            "ja": "沖縄 米軍基地 普天間 辺野古",
+            "en": "Japan Okinawa US military base Futenma Henoko",
+            "zh-Hans": "日本 冲绳 美军基地 普天间 边野古",
         },
     },
     {
-        "topic": "两岸/台海",
-        "gdelt": 'Taiwan AND ("Taiwan Strait" OR "cross-strait" OR China OR Beijing)',
+        "topic": "反戦運動/市民団体",
+        "gdelt": 'Japan AND (antiwar OR "peace movement" OR "peace activist" OR protest)',
         "queries": {
-            "zh-Hant": "台海 兩岸 陸委會",
-            "zh-Hans": "台海 两岸 陆委会",
-            "ja": "台湾海峡 中台関係",
-            "en": "Taiwan Strait cross-strait China",
+            "ja": "反戦運動 平和運動 市民団体 デモ",
+            "en": "Japan antiwar peace movement protest activist",
+            "zh-Hans": "日本 反战运动 和平运动 市民团体",
         },
     },
     {
-        "topic": "国防/军事",
-        "gdelt": 'Taiwan AND (defense OR military OR PLA OR "Ministry of National Defense")',
+        "topic": "自衛隊/軍事政策",
+        "gdelt": 'Japan AND ("Self-Defense Forces" OR "defense policy" OR "military spending")',
         "queries": {
-            "zh-Hant": "台灣 國防 軍事 國防部",
-            "zh-Hans": "台湾 国防 军事 国防部",
-            "ja": "台湾 防衛 軍事",
-            "en": "Taiwan defense military PLA",
+            "ja": "自衛隊 防衛政策 軍事費 防衛費",
+            "en": "Japan Self-Defense Forces defense policy military spending",
+            "zh-Hans": "日本 自卫队 防卫政策 军费",
         },
     },
     {
-        "topic": "外交/国际",
-        "gdelt": 'Taiwan AND (diplomacy OR "United States" OR Japan OR "Ministry of Foreign Affairs")',
+        "topic": "核廃絶/被爆者",
+        "gdelt": 'Japan AND (nuclear AND (abolition OR disarmament OR hibakusha))',
         "queries": {
-            "zh-Hant": "台灣 外交 美國 日本 外交部",
-            "zh-Hans": "台湾 外交 美国 日本 外交部",
-            "ja": "台湾 外交 米国 日本",
-            "en": "Taiwan diplomacy United States Japan",
+            "ja": "核廃絶 被爆者 核兵器 核軍縮",
+            "en": "Japan nuclear abolition disarmament hibakusha",
+            "zh-Hans": "日本 废除核武器 核裁军 被爆者",
         },
     },
     {
-        "topic": "政党攻防",
-        "gdelt": 'Taiwan AND (DPP OR KMT OR Kuomintang OR "Taiwan People\'s Party")',
+        "topic": "日米同盟/安保",
+        "gdelt": 'Japan AND ("US-Japan alliance" OR "security treaty" OR "Article 5")',
         "queries": {
-            "zh-Hant": "民進黨 國民黨 民眾黨",
-            "zh-Hans": "民进党 国民党 民众党 台湾",
-            "ja": "台湾 民進党 国民党 民衆党",
-            "en": "Taiwan DPP KMT Taiwan People's Party",
+            "ja": "日米同盟 安保条約 日米安保",
+            "en": "Japan US-Japan alliance security treaty Article 5",
+            "zh-Hans": "日本 日美同盟 安保条约",
         },
     },
     {
-        "topic": "选举/民调",
-        "gdelt": 'Taiwan AND (election OR poll OR polling OR recall)',
+        "topic": "近隣外交/東アジア",
+        "gdelt": 'Japan AND ("East Asia" AND (diplomacy OR tension OR "territorial dispute"))',
         "queries": {
-            "zh-Hant": "台灣 選舉 民調 罷免",
-            "zh-Hans": "台湾 选举 民调 罢免",
-            "ja": "台湾 選挙 世論調査",
-            "en": "Taiwan election poll recall",
+            "ja": "東アジア 外交 緊張 領土問題",
+            "en": "Japan East Asia diplomacy tension territorial dispute",
+            "zh-Hans": "日本 东亚 外交 紧张 领土争端",
         },
     },
     {
-        "topic": "司法/社会",
-        "gdelt": 'Taiwan AND (judicial OR prosecution OR court OR protest OR corruption)',
+        "topic": "平和教育/歴史認識",
+        "gdelt": 'Japan AND ("peace education" OR "history textbook" OR "war memory")',
         "queries": {
-            "zh-Hant": "台灣 司法 檢調 社會",
-            "zh-Hans": "台湾 司法 检调 社会",
-            "ja": "台湾 司法 社会 抗議",
-            "en": "Taiwan judicial prosecution protest",
+            "ja": "平和教育 歴史教科書 戦争の記憶",
+            "en": "Japan peace education history textbook war memory",
+            "zh-Hans": "日本 和平教育 历史教科书 战争记忆",
         },
     },
     {
-        "topic": "经济/产业",
-        "gdelt": 'Taiwan AND (TSMC OR semiconductor OR economy OR trade OR industry)',
+        "topic": "国際報道/メディア",
+        "gdelt": 'Japan AND (Reuters OR AP OR Bloomberg OR "Financial Times" OR BBC)',
         "queries": {
-            "zh-Hant": "台灣 經濟 產業 半導體",
-            "zh-Hans": "台湾 经济 产业 半导体",
-            "ja": "台湾 経済 半導体",
-            "en": "Taiwan economy semiconductor industry",
-        },
-    },
-    {
-        "topic": "能源/核电",
-        "gdelt": 'Taiwan AND (energy OR nuclear OR electricity OR power)',
-        "queries": {
-            "zh-Hant": "台灣 能源 核電 電價",
-            "zh-Hans": "台湾 能源 核电 电价",
-            "ja": "台湾 エネルギー 原発",
-            "en": "Taiwan energy nuclear power",
-        },
-    },
-    {
-        "topic": "国际媒体视角",
-        "gdelt": 'Taiwan AND (Reuters OR AP OR Bloomberg OR "Financial Times" OR BBC)',
-        "queries": {
-            "zh-Hant": "國際媒體 台灣 Reuters Bloomberg",
-            "zh-Hans": "国际媒体 台湾 路透 彭博",
-            "ja": "海外メディア 台湾 Reuters",
-            "en": "Taiwan Reuters AP Bloomberg Financial Times",
+            "ja": "日本 海外メディア Reuters Bloomberg",
+            "en": "Japan Reuters AP Bloomberg Financial Times BBC",
+            "zh-Hans": "日本 国际媒体 路透 彭博 BBC",
         },
     },
 ]
 DEFAULT_QUERIES = [topic["gdelt"] for topic in DEFAULT_SEARCH_TOPICS]
 NEWS_SEARCH_LOCALES = [
-    {"language": "繁体中文", "code": "zh-Hant", "hl": "zh-TW", "gl": "TW", "ceid": "TW:zh-Hant"},
-    {"language": "简体中文", "code": "zh-Hans", "hl": "zh-CN", "gl": "US", "ceid": "US:zh-Hans"},
     {"language": "日文", "code": "ja", "hl": "ja", "gl": "JP", "ceid": "JP:ja"},
     {"language": "英文", "code": "en", "hl": "en-US", "gl": "US", "ceid": "US:en"},
+    {"language": "简体中文", "code": "zh-Hans", "hl": "zh-CN", "gl": "US", "ceid": "US:zh-Hans"},
 ]
 DEFAULT_RSS_FEEDS = [
-    {"name": "中央社政治", "url": "https://feeds.feedburner.com/rsscna/politics", "source_type": "news_agency"},
-    {"name": "中央社两岸", "url": "https://feeds.feedburner.com/rsscna/mainland", "source_type": "news_agency"},
-    {"name": "Focus Taiwan", "url": "https://feeds.feedburner.com/rsscna/engnews", "source_type": "news_agency"},
-    {"name": "自由时报政治", "url": "https://news.ltn.com.tw/rss/politics.xml", "source_type": "local_media"},
-    {"name": "自由时报国防", "url": "https://news.ltn.com.tw/rss/def.xml", "source_type": "local_media"},
-    {"name": "Taipei Times", "url": "https://www.taipeitimes.com/xml/index.rss", "source_type": "international_media"},
+    {"name": "朝日新聞", "url": "https://www.asahi.com/rss/asahi/newsheadlines.rdf", "source_type": "major_newspaper"},
+    {"name": "毎日新聞", "url": "https://mainichi.jp/rss/etc/mainichi-flash.rss", "source_type": "major_newspaper"},
+    {"name": "NHK", "url": "https://www.nhk.or.jp/rss/news/cat0.xml", "source_type": "public_broadcaster"},
+    {"name": "沖縄タイムス", "url": "https://www.okinawatimes.co.jp/list/feed.xml", "source_type": "local_media"},
 ]
 GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
 
@@ -215,66 +183,62 @@ def _date_in_range(value: str | None, start_date: date, end_date: date) -> bool:
         return True
 
 
-def is_relevant_taiwan_public_affairs(title: str, text: str = "") -> bool:
+def is_relevant_japan_affairs(title: str, text: str = "") -> bool:
     haystack = f"{title}\n{text}".lower()
-    taiwan_markers = [
-        "taiwan",
-        "taiwan strait",
-        "cross-strait",
-        "台灣",
-        "臺灣",
-        "台湾",
-        "台海",
-        "兩岸",
-        "两岸",
-        "台湾海峡",
+    japan_markers = [
+        "japan",
+        "japanese",
+        "日本",
+        "にほん",
+        "nippon",
+        "okinawa",
+        "沖縄",
     ]
-    public_affairs_markers = [
-        "politic",
-        "government",
-        "legislature",
-        "legislative yuan",
-        "defense",
+    peace_markers = [
+        "antiwar",
+        "反戦",
+        "pacifism",
+        "pacifist",
+        "平和",
+        "peace",
+        "article 9",
+        "九条",
+        "憲法",
+        "constitution",
         "military",
-        "diplomacy",
-        "election",
-        "poll",
-        "dpp",
-        "kmt",
-        "kuomintang",
-        "president lai",
-        "china",
-        "pla",
-        "行政院",
-        "總統府",
-        "总统府",
-        "立法院",
-        "國防",
-        "国防",
-        "外交",
-        "選舉",
-        "选举",
-        "民調",
-        "民调",
-        "民進黨",
-        "民进党",
-        "國民黨",
-        "国民党",
-        "民眾黨",
-        "民众党",
-        "陸委會",
-        "陆委会",
-        "予算",
-        "防衛",
-        "外交",
-        "選挙",
-        "政党",
+        "defense",
+        "自衛隊",
+        "sdf",
+        "基地",
+        "base",
+        "futenma",
+        "henoko",
+        "普天間",
+        "辺野古",
+        "nuclear",
+        "核",
+        "hibakusha",
+        "被爆",
+        "disarmament",
+        "廃絶",
+        "us-japan",
+        "日米",
+        "安保",
+        "security treaty",
+        "alliance",
+        "protest",
+        "デモ",
+        "activist",
+        "運動",
+        "vetnam",
+        "iraq",
+        "war",
     ]
     noisy_markers = ["movie", "film", "trailer", "box office", "celebrity", "horoscope", "sports betting"]
-    if any(marker in haystack for marker in noisy_markers) and not any(marker in haystack for marker in public_affairs_markers):
+    if any(marker in haystack for marker in noisy_markers) and not any(marker in haystack for marker in peace_markers):
         return False
-    return any(marker in haystack for marker in taiwan_markers) and any(
-        marker in haystack for marker in public_affairs_markers
+    return any(marker in haystack for marker in japan_markers) and any(
+        marker in haystack for marker in peace_markers
     )
 
 
@@ -350,7 +314,7 @@ async def fetch_gdelt_query(
     articles = []
     for item in data.get("articles", []):
         normalized = _normalize_item(item, query)
-        if normalized and is_relevant_taiwan_public_affairs(normalized["title"], normalized.get("raw_text", "")):
+        if normalized and is_relevant_japan_affairs(normalized["title"], normalized.get("raw_text", "")):
             articles.append(normalized)
     diagnostic["ok"] = True
     diagnostic["article_count"] = len(articles)
@@ -405,7 +369,7 @@ async def fetch_google_news_query(
         if not title or not url:
             continue
         summary = str(entry.get("summary") or "")
-        if not is_relevant_taiwan_public_affairs(title, summary):
+        if not is_relevant_japan_affairs(title, summary):
             continue
         source = entry.get("source") or {}
         source_name = source.get("title") if isinstance(source, dict) else None
@@ -463,7 +427,7 @@ async def fetch_rss_feed(
         title = str(entry.get("title") or "").strip()
         url = str(entry.get("link") or "").strip()
         summary = str(entry.get("summary") or "")
-        if not title or not url or not is_relevant_taiwan_public_affairs(title, summary):
+        if not title or not url or not is_relevant_japan_affairs(title, summary):
             continue
         articles.append(
             {
@@ -485,12 +449,3 @@ async def fetch_rss_feed(
     if not articles:
         diagnostic["message"] = "RSS feed returned no relevant articles for this date range."
     return articles, diagnostic
-
-
-async def fetch_gdelt_taiwan_politics(start_date: date, end_date: date, max_records: int = 50) -> list[dict[str, Any]]:
-    return await fetch_gdelt_articles(
-        start_date=start_date,
-        end_date=end_date,
-        queries=DEFAULT_QUERIES,
-        max_records_per_query=max_records,
-    )

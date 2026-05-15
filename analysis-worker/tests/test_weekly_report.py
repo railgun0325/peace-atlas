@@ -61,4 +61,4 @@ def test_fallback_report_contains_public_discussion_section():
     assert "样本量：1 篇帖子、2 条评论" in markdown
     assert "近期总体态度" in markdown
     assert "长期总体态度" in markdown
-    assert "<!-- tpi-visual-signals-start -->" in markdown
+    assert "<!-- jai-visual-signals-start -->" in markdown

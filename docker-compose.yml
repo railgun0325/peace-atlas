@@ -110,6 +110,8 @@ services:
   analysis-worker:
     build:
       context: ./analysis-worker
+      args:
+        PLAYWRIGHT_INSTALL_CHROMIUM: ${PLAYWRIGHT_INSTALL_CHROMIUM:-false}
     restart: "no"
     depends_on:
       postgres:
@@ -131,7 +133,6 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       REPORTS_DIR: /app/reports
-      PROMPT_PATH: /app/prompts/weekly_deep_analysis_prompt.md
       HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
       HTTPS_PROXY: ${OUTBOUND_HTTP_PROXY:-}
       OUTBOUND_HTTP_PROXY: ${OUTBOUND_HTTP_PROXY:-}
@@ -144,11 +145,21 @@ services:
       REDDIT_STOP_AFTER_FIRST_DEFAULT_HIT: ${REDDIT_STOP_AFTER_FIRST_DEFAULT_HIT:-true}
       REDDIT_ACCEPT_DEFAULT_LATEST_FALLBACK: ${REDDIT_ACCEPT_DEFAULT_LATEST_FALLBACK:-true}
       REDDIT_GLOBAL_SEARCH: ${REDDIT_GLOBAL_SEARCH:-false}
+      INSTAGRAM_ENABLED: ${INSTAGRAM_ENABLED:-false}
+      INSTAGRAM_USERNAME: ${INSTAGRAM_USERNAME:-}
+      INSTAGRAM_PASSWORD: ${INSTAGRAM_PASSWORD:-}
+      INSTAGRAM_MIN_DELAY_SECONDS: ${INSTAGRAM_MIN_DELAY_SECONDS:-8}
+      INSTAGRAM_DAILY_LIMIT: ${INSTAGRAM_DAILY_LIMIT:-40}
+      INSTAGRAM_USE_PLAYWRIGHT: ${INSTAGRAM_USE_PLAYWRIGHT:-false}
+      INSTAGRAM_PLAYWRIGHT_HEADLESS: ${INSTAGRAM_PLAYWRIGHT_HEADLESS:-true}
     ports:
       - "${ANALYSIS_WORKER_PORT:-8190}:8090"
     volumes:
       - ./analysis-worker/app:/app/app:ro
       - ./analysis-worker/config:/app/config:ro
+      - ./analysis-worker/standalone_social_collector.py:/app/standalone_social_collector.py:ro
+      - ./analysis-worker/ig_login.py:/app/ig_login.py:ro
+      - ./analysis-worker/data:/app/data
       - ./reports:/app/reports
       - ./prompts:/app/prompts:ro
 

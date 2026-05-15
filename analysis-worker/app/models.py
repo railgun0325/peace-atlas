@@ -58,7 +58,7 @@ class GdeltFetchResponse(BaseModel):
 class DiscussionFetchRequest(BaseModel):
     start_date: date
     end_date: date
-    platforms: list[str] = Field(default_factory=lambda: ["ptt", "reddit"])
+    platforms: list[str] = Field(default_factory=lambda: ["reddit"])
     keywords: list[str] | None = None
     max_posts_per_platform: int = Field(default=20, ge=1, le=100)
     max_comments_per_post: int = Field(default=50, ge=0, le=300)

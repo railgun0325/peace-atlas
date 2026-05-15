@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 
-COLLECTION = "taiwan_politics_articles"
+COLLECTION = "japan_antiwar_articles"
 
 
 def qdrant_url() -> str:

@@ -64,12 +64,12 @@ CREATE TABLE IF NOT EXISTS source_registry (
 INSERT INTO source_registry
     (source_name, source_url, source_type, political_leaning_note, reliability_note, enabled)
 VALUES
-    ('中央社政治', 'https://feeds.feedburner.com/rsscna/politics', 'news_agency', '台湾国家通讯社；来源背景备注不能替代内容证据。', '公开 RSS，适合作为相对中性基线。', TRUE),
-    ('中央社两岸', 'https://feeds.feedburner.com/rsscna/mainland', 'news_agency', '台湾国家通讯社；来源背景备注不能替代内容证据。', '公开 RSS，适合追踪两岸议题。', TRUE),
-    ('自由时报政治', 'https://news.ltn.com.tw/rss/politics.xml', 'local_media', '外界常视为偏泛绿媒体；分析时仅作为来源背景备注。', '公开 RSS，需与通讯社、官方来源交叉验证。', TRUE),
-    ('Taipei Times', 'https://www.taipeitimes.com/xml/index.rss', 'international_media', '英文媒体；社论与新闻需区分。', '公开 RSS，适合英文视角补充。', TRUE),
-    ('Google News Taiwan politics', 'https://news.google.com/rss/search?q=Taiwan%20politics&hl=en-US&gl=US&ceid=US:en', 'international_media', '聚合搜索源，不代表 Google 立场。', '用于发现国际媒体公开报道，需回到原始链接核验。', TRUE),
-    ('GDELT DOC 2.0', 'https://api.gdeltproject.org/api/v2/doc/doc', 'international_media', '聚合索引源，不代表 GDELT 立场。', '用于发现国际媒体报道，失败时不影响主流程。', TRUE)
+    ('NHK NEWS WEB', 'https://www.nhk.or.jp/rss/news/cat0.xml', 'public_broadcaster', '日本公共放送；中立的報道。', '公開RSS、信頼性の高いソース。', TRUE),
+    ('朝日新聞', 'https://www.asahi.com/rss/asahi/newsheadlines.rdf', 'national_newspaper', '全国紙。', '公開RSS、他ソースとのクロスチェック推奨。', TRUE),
+    ('毎日新聞', 'https://mainichi.jp/rss/etc/mainichi-flash.rss', 'national_newspaper', '全国紙。', '公開RSS。', TRUE),
+    ('沖縄タイムス', 'https://www.okinawatimes.co.jp/list/feed.xml', 'local_newspaper', '沖縄県地方紙。基地問題に詳しい。', '公開RSS、沖縄関連の重要なソース。', TRUE),
+    ('Google News Japan', 'https://news.google.com/rss/search?q=Japan&hl=ja&gl=JP&ceid=JP:ja', 'news_aggregator', '集約検索ソース。Googleの立場を代表しない。', '国際報道の発見に使用。元リンクでの確認が必要。', TRUE),
+    ('GDELT DOC 2.0', 'https://api.gdeltproject.org/api/v2/doc/doc', 'news_aggregator', 'グローバルニュース索引。GDELTの立場を代表しない。', '国際報道の発見に使用。失敗時はメインフローに影響しない。', TRUE)
 ON CONFLICT (source_url) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS discussion_posts (
