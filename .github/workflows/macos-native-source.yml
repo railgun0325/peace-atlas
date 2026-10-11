@@ -78,6 +78,20 @@ jobs:
                       break
               else:
                   raise SystemExit('Draft lookup exceeded the bounded release list')
+              if not matches:
+                  if tag != 'v2.0.0-foundation-recovery.20261011':
+                      raise SystemExit('Only the explicitly requested recovery draft may be created')
+                  resolved = api('repos/' + repo + '/commits/' + source_sha)
+                  if resolved.get('sha') != source_sha:
+                      raise SystemExit('Draft source commit did not resolve exactly')
+                  body = {'tag_name': tag, 'target_commitish': source_sha,
+                          'name': 'PEACE ATLAS 2.0.0 - Report recovery and native startup fixes',
+                          'body': 'Private recovery candidate from source ' + source_sha + '. Full regression and native platform acceptance are in progress. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
+                          'draft': True, 'prerelease': True}
+                  created = subprocess.run(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
+                                            'repos/' + repo + '/releases', '--input', '-'],
+                                           input=json.dumps(body), text=True, capture_output=True, check=True, timeout=120)
+                  matches = [json.loads(created.stdout)]
               if len(matches) != 1 or matches[0].get('draft') is not True:
                   raise SystemExit('Exactly one existing draft with the selected tag is required')
               return matches[0]
