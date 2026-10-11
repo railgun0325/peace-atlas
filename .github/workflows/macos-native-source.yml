@@ -388,4 +388,10 @@ jobs:
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.json
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.png
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-backup-controls.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/logs/desktop.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/logs/backend.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/logs/desktop.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/logs/backend.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/logs/desktop.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/logs/backend.log
             ${{ runner.temp }}/peace-atlas-native-source/release-assets/*
