@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import hashlib, json, os, pathlib, platform, plistlib, shutil, struct, subprocess, traceback
+          import hashlib, json, os, pathlib, platform, plistlib, shutil, stat, struct, subprocess, time, traceback
           import xml.etree.ElementTree as ET
 
           REPO = 'railgun0325/peace-atlas'
@@ -73,6 +73,66 @@ jobs:
               if must_succeed:
                   require(result.returncode == 0, name + ' failed with exit ' + str(result.returncode))
               return result.returncode
+          def permission_diagnostic(app):
+              # Metadata only, as the ordinary runner user. Never follow links or inspect HOME/profile.
+              result = {'scope': str(app), 'current_uid': os.getuid(), 'current_gid': os.getgid(),
+                        'groups': os.getgroups(), 'entry_limit': 20000, 'issue_limit': 128,
+                        'time_limit_seconds': 15, 'entries_examined': 0, 'symlinks_skipped': 0,
+                        'bounded_scan_stopped': False, 'anchors': [], 'issues': [],
+                        'file_contents_read': False, 'permissions_or_ownership_changed': False}
+              deadline = time.monotonic() + result['time_limit_seconds']
+              def issue(row):
+                  if len(result['issues']) < result['issue_limit']:
+                      result['issues'].append(row)
+              def metadata(path):
+                  relative = path.relative_to(app).as_posix()
+                  info = path.lstat()
+                  row = {'path': relative, 'owner_uid': info.st_uid, 'owner_gid': info.st_gid,
+                         'mode': oct(stat.S_IMODE(info.st_mode))}
+                  if stat.S_ISLNK(info.st_mode):
+                      row['kind'] = 'symlink-not-followed'
+                      result['symlinks_skipped'] += 1
+                      return row
+                  directory = stat.S_ISDIR(info.st_mode)
+                  row.update(kind='directory' if directory else 'file', readable=os.access(path, os.R_OK),
+                             executable=os.access(path, os.X_OK))
+                  reasons = []
+                  if not row['readable']:
+                      reasons.append('ordinary-user-cannot-read')
+                  requires_execute = directory or bool(info.st_mode & 0o111) or relative.startswith('Contents/MacOS/')
+                  if requires_execute and not row['executable']:
+                      reasons.append('ordinary-user-cannot-execute-or-traverse')
+                  if reasons:
+                      issue(dict(row, reasons=reasons))
+                  return row
+              for relative in ('.', 'Contents', 'Contents/MacOS', 'Contents/Frameworks',
+                               'Contents/Frameworks/Electron Framework.framework', 'Contents/Resources',
+                               'Contents/Resources/python', 'Contents/Resources/python/bin',
+                               'Contents/Resources/node', 'Contents/Resources/harness', 'Contents/Resources/browsers'):
+                  try:
+                      result['anchors'].append(metadata(app / relative))
+                  except OSError as error:
+                      result['anchors'].append({'path': relative, 'error': type(error).__name__, 'errno': error.errno})
+              def walk_error(error):
+                  path = pathlib.Path(error.filename)
+                  if path.is_relative_to(app):
+                      issue({'path': path.relative_to(app).as_posix(), 'error': type(error).__name__, 'errno': error.errno})
+              for directory, names, files in os.walk(app, followlinks=False, onerror=walk_error):
+                  names.sort()
+                  files.sort()
+                  for name in names + files:
+                      if result['entries_examined'] >= result['entry_limit'] or len(result['issues']) >= result['issue_limit'] or time.monotonic() >= deadline:
+                          result['bounded_scan_stopped'] = True
+                          break
+                      result['entries_examined'] += 1
+                      try:
+                          metadata(pathlib.Path(directory) / name)
+                      except OSError as error:
+                          issue({'path': (pathlib.Path(directory) / name).relative_to(app).as_posix(),
+                                 'error': type(error).__name__, 'errno': error.errno})
+                  if result['bounded_scan_stopped']:
+                      break
+              return result
           def download(asset_id, name, expected_sha, size, assets):
               row = next((item for item in assets if item['id'] == asset_id), None)
               require(row is not None and row['name'] == name and row['size'] == size
@@ -213,6 +273,12 @@ jobs:
               receipt['error'] = str(error)
               save(receipt['stage'])
               (evidence / 'failure.log').write_text(traceback.format_exc(), encoding='utf-8')
+              if receipt['actual_install_completed'] and installed.is_dir():
+                  try:
+                      diagnostic = permission_diagnostic(installed)
+                      (evidence / 'installed-permission-diagnostic.json').write_text(json.dumps(diagnostic, indent=2), encoding='utf-8')
+                  except Exception:
+                      (evidence / 'permission-diagnostic-error.log').write_text(traceback.format_exc(), encoding='utf-8')
               raise
           finally:
               # Only explicitly selected smoke output is exported; profile DB, connection files and HOME are excluded.
