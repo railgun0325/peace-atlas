@@ -118,9 +118,28 @@ class ClassificationGateway:
         self.transport_event = transport_event
 
     async def classify(self, profiles):
-        return await configured_ai_json(SYSTEM, {'accounts': profiles}, reasoning_effort='low',
-            max_tokens=min(32768, max(1800, len(profiles) * 160)), timeout_limit=180,
+        return await configured_ai_json(SYSTEM, {'accounts': profiles}, reasoning_effort='none',
+            max_tokens=min(65536, max(4096, len(profiles) * 320)), timeout_limit=180,
             transport_retry=True, transport_event=self.transport_event)
+
+
+def _safe_ai_diagnostic(error):
+    original = getattr(error, 'ai_diagnostic', None)
+    if not isinstance(original, dict):
+        return {}
+    diagnostic = {}
+    finish = original.get('finish_reason')
+    if isinstance(finish, str):
+        diagnostic['finish_reason'] = finish if finish in {
+            'length', 'content_filter', 'tool_calls', 'function_call', 'insufficient_system_resource'} else 'other'
+    for key, minimum in (('requested_max_tokens', 1), ('completion_tokens', 0)):
+        value = original.get(key)
+        if type(value) is int and minimum <= value <= 393216:
+            diagnostic[key] = value
+    effort = original.get('reasoning_effort')
+    if isinstance(effort, str) and effort in {'none', 'low', 'high', 'max'}:
+        diagnostic['reasoning_effort'] = effort
+    return diagnostic
 
 
 def validate_classifications(value, rows):
@@ -236,9 +255,17 @@ async def run_classification(store, job, *, checkpoint, cancelled, gateway=None)
             decisions = validate_classifications({'classifications': current.get('decisions')}, batch)
         else:
             state.update(phase='classifying', current_batch=len(state['batches']) + 1, current_batch_size=len(batch))
+            state.pop('ai_diagnostic', None)
             state['model_calls'] += 1
             await checkpoint(state)
-            value = await gateway.classify(model_profiles(batch))
+            try:
+                value = await gateway.classify(model_profiles(batch))
+            except PipelineError as error:
+                diagnostic = _safe_ai_diagnostic(error)
+                if diagnostic:
+                    state['ai_diagnostic'] = diagnostic
+                    await checkpoint(state)
+                raise
             decisions = validate_classifications(value, batch)
             state['current_classification'] = {'batch_digest': batch_digest, 'decisions': decisions}
         state['phase'] = 'saving'

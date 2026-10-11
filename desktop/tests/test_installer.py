@@ -2,8 +2,11 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import plistlib
+import shutil
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -188,6 +191,56 @@ class InstallerTests(unittest.TestCase):
         with patch.object(INSTALLER.platform, "system", return_value="Windows"):
             with self.assertRaisesRegex(RuntimeError, "Native macOS"):
                 INSTALLER.compile_macos({})
+
+    @unittest.skipUnless(os.name == "posix", "Real Unix bundle permissions required")
+    def test_mac_compile_makes_private_runtime_resource_readable_in_staging_only(self):
+        app = self.root / "PEACE ATLAS.app"
+        resource = app / "Contents/Resources/python/lib/python3.12/site-packages/playwright/driver/README.md"
+        resource.parent.mkdir(parents=True)
+        resource.write_bytes(b"accepted runtime notice")
+        resource.chmod(0o600)
+        executable = app / "Contents/MacOS/PEACE ATLAS"
+        executable.parent.mkdir()
+        executable.write_bytes(b"accepted main executable")
+        executable.chmod(0o755)
+        (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": "org.peaceatlas.workbench", "CFBundleExecutable": "PEACE ATLAS"}))
+        link = resource.parent / "README-link.md"
+        link.symlink_to("README.md")
+        accepted = INSTALLER.inventory(app, mac=True)
+        prepared = INSTALLER.prepare_macos(app, {"target": "macos-arm64", "version": "2.0.0"}, self.root / "mac-stage", self.root / "setup.pkg")
+        copied = Path(prepared["workspace"]) / "payload/PEACE ATLAS.app"
+        commands = []
+
+        def native_command(command, **kwargs):
+            commands.append(command)
+            if command[0] == "/usr/bin/ditto":
+                shutil.copytree(command[1], command[2], symlinks=True)
+            elif command[0] == "/usr/bin/pkgbuild":
+                staged_resource = copied / resource.relative_to(app)
+                self.assertEqual(stat.S_IMODE(staged_resource.stat().st_mode), 0o644)
+                self.assertEqual(stat.S_IMODE((copied / executable.relative_to(app)).stat().st_mode), 0o755)
+                self.assertEqual(INSTALLER.inventory(copied, mac=True), accepted)
+
+        with patch.object(INSTALLER.platform, "system", return_value="Darwin"), patch.object(INSTALLER.subprocess, "run", side_effect=native_command):
+            INSTALLER.compile_macos(prepared)
+        self.assertEqual(stat.S_IMODE(resource.stat().st_mode), 0o600)
+        self.assertEqual(INSTALLER.inventory(app, mac=True), accepted)
+        self.assertEqual(os.readlink(copied / link.relative_to(app)), "README.md")
+        codesign_targets = [command[-1] for command in commands if command[0] == "/usr/bin/codesign"]
+        self.assertEqual(codesign_targets, [str(app), str(copied)])
+
+    @unittest.skipUnless(os.name == "posix", "Real Unix bundle permissions required")
+    def test_mac_payload_readability_rejects_link_escape_without_touching_target(self):
+        app = self.root / "PEACE ATLAS.app"
+        app.mkdir()
+        external = self.root / "outside.txt"
+        external.write_bytes(b"outside staging")
+        external.chmod(0o600)
+        (app / "outside-link").symlink_to(external)
+        with self.assertRaisesRegex(ValueError, "escapes payload"):
+            INSTALLER.make_macos_payload_readable(app)
+        self.assertEqual(stat.S_IMODE(external.stat().st_mode), 0o600)
+        self.assertEqual(external.read_bytes(), b"outside staging")
 
     def test_mac_preinstall_does_not_touch_user_data_security_or_launch(self):
         script = INSTALLER.MAC_PREINSTALL

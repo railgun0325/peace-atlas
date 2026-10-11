@@ -348,6 +348,18 @@ def prepare_macos(package, payload, workspace, output):
             "installer_signature": "unsigned", "application_signature": "native ad-hoc (must be verified)", "notarization": "not performed"}
 
 
+def make_macos_payload_readable(app):
+    """Make the copied, system-wide payload readable without following links."""
+    app = Path(app)
+    for row in inventory(app, mac=True):
+        if "link" in row:
+            continue
+        member = app.joinpath(*PurePosixPath(row["path"]).parts)
+        mode = stat.S_IMODE(member.lstat().st_mode)
+        if mode & 0o444 != 0o444:
+            member.chmod(mode | 0o444)
+
+
 def compile_macos(prepared):
     if platform.system() != "Darwin":
         raise RuntimeError("Native macOS pkgbuild/productbuild and signature verification required")
@@ -355,7 +367,13 @@ def compile_macos(prepared):
     subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True, timeout=180)
     payload = workspace / "payload"
     payload.mkdir()
-    subprocess.run(["/usr/bin/ditto", str(app), str(payload / app.name)], check=True, timeout=300)
+    staged_app = payload / app.name
+    subprocess.run(["/usr/bin/ditto", str(app), str(staged_app)], check=True, timeout=300)
+    # Dependency wheels can carry owner-only resources (for example Playwright's
+    # driver README is 0600). pkgbuild installs them as root, blocking ordinary
+    # users' signature checks. Change only read bits in this fresh payload copy.
+    make_macos_payload_readable(staged_app)
+    subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(staged_app)], check=True, timeout=180)
     subprocess.run(["/usr/bin/pkgbuild", "--root", str(payload), "--install-location", "/Applications", "--component-plist", str(workspace / "components.plist"),
                     "--scripts", str(workspace / "scripts"), "--identifier", "org.peaceatlas.workbench", "--version", prepared["version"], str(workspace / "component.pkg")], check=True, timeout=1800)
     subprocess.run(["/usr/bin/productbuild", "--distribution", str(workspace / "distribution.xml"), "--resources", str(workspace / "resources"),

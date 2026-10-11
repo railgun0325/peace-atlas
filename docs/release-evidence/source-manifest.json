@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-10-11T16:31:30.754570+00:00",
+  "captured_at": "2026-10-11T17:41:50.970990+00:00",
   "freeze_format_version": 2,
   "targets": {
     "windows-x64": 3142,
@@ -120,7 +120,7 @@
     },
     "backend/app/workbench/fast_account_classification.py": {
       "source": "analysis-worker/app/workbench/fast_account_classification.py",
-      "sha256": "be1a6b09d635696e555acd96bb1cd1a76b24221ecfa1c2a2aa9517339c6b1435"
+      "sha256": "63e375c87795998e3b833c533556916056c840daf2cc8293ad30d46e57583fea"
     },
     "backend/app/workbench/google_news_resolver.py": {
       "source": "analysis-worker/app/workbench/google_news_resolver.py",
@@ -172,7 +172,7 @@
     },
     "backend/app/workbench/query_plan.py": {
       "source": "analysis-worker/app/workbench/query_plan.py",
-      "sha256": "a587161c6bbd03f8f53e92494b458953d086a4b7eb004924766fb0df6a499697"
+      "sha256": "d50c7120d4c84ae7b13f8a072f915e0aeffb91230e9e74859278ea2f08340f41"
     },
     "backend/app/workbench/registry_graph.py": {
       "source": "analysis-worker/app/workbench/registry_graph.py",
@@ -18994,7 +18994,7 @@
     "analysis-worker/tests/test_workbench_deferred_chunk_checkpoint.py": "80f893788f9c2fb7bb32f35b5eaec28ead75cbdd6cf78e28d59f18a43832356b",
     "analysis-worker/tests/test_workbench_direction_persistence.py": "fc036c437f6d33df87a30a407ff5e2038154f1e403c98a668c4d8d9711b82f16",
     "analysis-worker/tests/test_workbench_external_browser.py": "ccc06f0cc67c8fed7cc46fa18d40e62144f45fa3ab9e74daad16169d1a63ad0b",
-    "analysis-worker/tests/test_workbench_fast_account_classification.py": "99cf05616dab16a2c7896deabdfb549baff9fef5ac18a59f9fcbeed8659f5769",
+    "analysis-worker/tests/test_workbench_fast_account_classification.py": "9113ac33b8c4495db374f747184e6147e15185f047ebec4f5ce885ceb91c2da6",
     "analysis-worker/tests/test_workbench_firefox_import.py": "9b62f9db5e554e0f40d0e5a86b709e889da4a26d7bd16bea5a09e085ffa052df",
     "analysis-worker/tests/test_workbench_frontier_pipeline.py": "dc54efad5ab2a86b095f6f4a8943a9b5c64d109d9e7dbf9d7cf23a8ff38c9a44",
     "analysis-worker/tests/test_workbench_frontier_read_performance.py": "66dec3962cbf0ed52bfa509cf138684d6489d79d84698dc7adac86dcc1bea77c",
@@ -19081,10 +19081,10 @@
     "desktop/tests/restore.test.cjs": "0d32da1e4dcdc5697e2482ce445d7401f8d253cfc89e7e7266a32f5600de6948",
     "desktop/tests/test_agent_menu.cjs": "1d26fa4ca7b011fb25fe9f05039584f1296786cd703f53bbd084564edaadd420",
     "desktop/tests/test_build.py": "02a56e75b670217221048fed5d16f86fe80d099bceca30559dd06b94e88d1cef",
-    "desktop/tests/test_installer.py": "2589f298aa78ceb03b1a29f7c98ee63f7ff5f6b0c0fd1f0638f9c5da5ae0d1aa"
+    "desktop/tests/test_installer.py": "c930f8cf32997c46989538f8df3d7ae1842830d2f4f451f130c592dff78ae4d9"
   },
   "build_tool_files": {
-    "desktop/installer.py": "c354260bb5b0ac0f16cdefa9433e836862be0072deafc58d67d5f938274b64e0",
+    "desktop/installer.py": "63b50f5481d0475b5d017404132331d21bd94a071ad15f3665831b1275624a81",
     "desktop/installer.nsi": "fd4e89fbc6165d226af0ffa31b462af048851c99ef8440ed6da555e1edefc2e0"
   }
 }

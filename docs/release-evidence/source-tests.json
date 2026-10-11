@@ -1,38 +1,43 @@
 {
   "ok": true,
-  "source_manifest_sha256": "0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef",
-  "recorded_at": "2026-10-11T16:46:30.076927+00:00",
+  "source_manifest_sha256": "f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa",
+  "recorded_at": "2026-10-11T17:51:16.104937+00:00",
   "shipping_files": 3156,
   "source_stable": true,
   "fixture_model_only": true,
   "groups": {
     "backend": {
-      "passed": 3077,
+      "passed": 3079,
       "failed": 0,
-      "seconds": 442.8,
+      "seconds": 502.92,
       "exit_code": 0,
-      "sha256": "a7de03e0c1e007df592cc02f245ccfc62301c584bec6192fcbec03ad90d150b3"
+      "sha256": "47878b0f97da20c767480e4419239c5fbacd2626efeae3f753ee8f186b85f0bf",
+      "skipped": 0
     },
     "frontend": {
       "passed": 202,
       "failed": 0,
-      "seconds": 73.2279114,
+      "seconds": 80.6765659,
       "exit_code": 0,
-      "sha256": "d11bd58d60fd3962f832681a1fc82dc89b387c205abe47eae29f40627baeff68"
+      "sha256": "c341788ac0bf40b36a331203dd08de9402035a3e481cdc708b23145783d14d08",
+      "skipped": 0
     },
     "desktop": {
       "passed": 62,
       "failed": 0,
-      "seconds": 12.1845766,
+      "seconds": 15.973906300000001,
       "exit_code": 0,
-      "sha256": "37838747aa399960cd108003190dc9b9b8b77103c03a298665400af3f4edbe15"
+      "sha256": "6c63c709230eab8d2ca71d75db2f5bc82b063430dd3f747c6b2dd196f3c5966c",
+      "skipped": 0
     },
     "builder": {
       "passed": 49,
       "failed": 0,
-      "seconds": 6.64,
+      "seconds": 7.04,
       "exit_code": 0,
-      "sha256": "6204eb24a26768aa0c58209761ecc16d92fde73948c72f6affa0803a205dd30a"
+      "sha256": "644c3a4961a17388df57cc5207f167c5cce8a36dc89f4dd1255bd0af17337bf1",
+      "skipped": 2,
+      "skip_reason": "Two added macOS permission tests require a POSIX filesystem"
     }
   }
 }

@@ -1,8 +1,10 @@
 """Fast classification uses saved profile fixtures and MockGateway only."""
 import asyncio
 import copy
+import json
 
 from fastapi.testclient import TestClient
+import httpx
 import pytest
 
 from app.workbench import fast_account_classification as fast
@@ -143,6 +145,88 @@ def test_dict_transport_attempt_callbacks_count_three_reserved_requests(store, m
     assert result['tool_calls'] == 0
     assert any(value.get('transport_attempts') == 3 and value['model_calls'] == 3 for value in checkpoints)
     assert store.get_job(job['id'])['result']['transport_retries'] == 2
+
+
+def test_fast_gateway_wire_disables_thinking_and_preserves_other_calls_default(monkeypatch):
+    from app.workbench import query_plan
+    native = httpx.AsyncClient
+    requests = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        requests.append(payload)
+        data = json.loads(payload['messages'][1]['content'])
+        value = {'classifications': output(data['accounts'])} if 'accounts' in data else {'ok': True}
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop',
+            'message': {'content': json.dumps(value)}}]})
+
+    monkeypatch.setattr(query_plan.httpx, 'AsyncClient', lambda **options: native(
+        transport=httpx.MockTransport(handler), **options))
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'synthetic-fast-test-only')
+    monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    monkeypatch.setenv('DEEPSEEK_MODEL', 'deepseek-flash')
+    for key in ('DEEPSEEK_CONTEXT_WINDOW_TOKENS', 'DEEPSEEK_MAX_OUTPUT_TOKENS'):
+        monkeypatch.delenv(key, raising=False)
+
+    async def scenario():
+        for count in (61, 200):
+            profiles = [{'id': f'account_{index}', 'display_name': '公开账号',
+                         'handle': f'handle_{index}', 'public_bio': '已保存公开简介'} for index in range(count)]
+            result = await fast.ClassificationGateway().classify(profiles)
+            assert len(result['classifications']) == count
+        assert await query_plan.configured_ai_json('仅输出 JSON', {'public': '已保存来源'}) == {'ok': True}
+
+    asyncio.run(scenario())
+    assert [request['reasoning_effort'] for request in requests] == ['none', 'none', 'low']
+    assert [request['max_tokens'] for request in requests] == [19520, 64000, 1800]
+    assert all(request['response_format'] == {'type': 'json_object'} for request in requests)
+    assert all('tools' not in request and 'thinking' not in request for request in requests)
+
+
+def test_nonstop_failure_persists_only_safe_diagnostics_and_no_account_writes(store, monkeypatch):
+    from app.workbench import query_plan
+    accounts = [seed(store, status='verified'), seed(store, 'second')]
+    before = [store.get_account(row['id']) for row in accounts]
+    job = job_for(store)
+    native = httpx.AsyncClient
+
+    def handler(request):
+        payload = json.loads(request.content)
+        assert payload['reasoning_effort'] == 'none'
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'length',
+            'message': {'content': 'private-response-marker', 'reasoning_content': 'private-reasoning-marker'}}],
+            'usage': {'completion_tokens': payload['max_tokens']}})
+
+    original = fast.ClassificationGateway
+
+    class UntrustedDiagnosticGateway(original):
+        async def classify(self, profiles):
+            try:
+                return await super().classify(profiles)
+            except PipelineError as error:
+                # Even unexpected provider additions cannot enter the saved job.
+                error.ai_diagnostic.update(provider_body='private-response-marker',
+                    reasoning_content='private-reasoning-marker', api_key='synthetic-fast-test-only')
+                raise
+
+    monkeypatch.setattr(fast, 'ClassificationGateway', UntrustedDiagnosticGateway)
+    monkeypatch.setattr(query_plan.httpx, 'AsyncClient', lambda **options: native(
+        transport=httpx.MockTransport(handler), **options))
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'synthetic-fast-test-only')
+    monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    monkeypatch.setenv('DEEPSEEK_MODEL', 'deepseek-flash')
+    asyncio.run(JobRunner(store)._execute(job))
+    saved = store.get_job(job['id'])
+    assert saved['status'] == 'failed' and saved['progress'] == 0
+    assert saved['error'] == 'AI 输出未完整结束；未采用截断内容。'
+    assert saved['result']['completed'] == 0 and saved['result']['batches'] == [] and saved['result']['results'] == []
+    assert saved['result']['model_calls'] == saved['result']['transport_attempts'] == 1
+    assert saved['result']['tool_calls'] == 0
+    assert saved['result']['ai_diagnostic'] == {'finish_reason': 'length', 'requested_max_tokens': 4096,
+        'completion_tokens': 4096, 'reasoning_effort': 'none'}
+    assert not any(marker in json.dumps(saved, ensure_ascii=False) for marker in (
+        'private-response-marker', 'private-reasoning-marker', 'synthetic-fast-test-only'))
+    assert [store.get_account(row['id']) for row in accounts] == before
 
 
 @pytest.mark.parametrize('mutation', ['duplicate', 'missing', 'invented', 'non_string', 'extra', 'empty_reason', 'invalid_type'])

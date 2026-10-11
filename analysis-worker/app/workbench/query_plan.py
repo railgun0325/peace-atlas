@@ -402,7 +402,7 @@ async def configured_ai_json(system: str, data: dict, *, max_tokens: int = 1800,
     base = _url(os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")).rstrip("/")
     endpoint = base if base.endswith("/chat/completions") else base + "/chat/completions"
     if (type(transport_retry) is not bool or transport_event is not None and not callable(transport_event)
-            or reasoning_effort not in {"low", "high", "max"}
+            or reasoning_effort not in {"none", "low", "high", "max"}
             or (max_input_chars is not None and (isinstance(max_input_chars, bool)
                 or not isinstance(max_input_chars, int) or max_input_chars < 1))
             or isinstance(timeout_limit, bool) or not isinstance(timeout_limit, (int, float))
