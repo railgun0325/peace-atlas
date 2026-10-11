@@ -272,14 +272,27 @@ jobs:
           with (evidence / 'raw-signature-diagnostic.log').open('w') as log:
               raw_signature = subprocess.run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)],
                                              stdout=log, stderr=subprocess.STDOUT, timeout=180).returncode
-          owned_home = evidence / 'owned-home'
+          def native_smoke_environment(parent_env, native_tmp, post_open):
+              native_home = parent_env.get('HOME')
+              if not isinstance(native_home, str) or not native_home or '\x00' in native_home or not pathlib.PurePosixPath(native_home).is_absolute():
+                  raise SystemExit('The runner native HOME is required; no synthetic home fallback is allowed')
+              env = {name: parent_env[name] for name in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if name in parent_env}
+              env.update(HOME=native_home, TMPDIR=str(native_tmp) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
+                         WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(post_open))
+              return env
           native_tmp = evidence / 'native-tmp'
           post_open = evidence / 'finalizer-post-open-profile'
-          for path in (owned_home, native_tmp, post_open):
+          for path in (native_tmp, post_open):
               path.mkdir()
-          env = {name: os.environ[name] for name in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if name in os.environ}
-          env.update(HOME=str(owned_home), TMPDIR=str(native_tmp) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
-                     WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(post_open))
+          # Preserve the native OS user context; application data stays explicitly isolated.
+          env = native_smoke_environment(os.environ, native_tmp, post_open)
+          (evidence / 'native-environment.json').write_text(json.dumps({
+              'runner_native_home_preserved': env['HOME'] == os.environ['HOME'],
+              'explicit_smoke_data_dir_preserved': env['WORKBENCH_DATA_DIR'] == str(post_open),
+              'owned_tmpdir_preserved': env['TMPDIR'] == str(native_tmp) + '/',
+              'environment_values_saved': False, 'keychain_operations_added': False,
+              'plaintext_fallback_added': False}, indent=2))
+          print('Native smoke environment: runner HOME preserved; application data and temp remain isolated', flush=True)
           # The finalizer's concluding `open` also inherits this explicit smoke profile.
           command('native-finalizer', ['bash', str(stage / 'Finalize PEACE ATLAS.command'), '--smoke'], env=env, timeout=1200)
           audits = list(native_tmp.glob('peace-atlas-sign.*'))
