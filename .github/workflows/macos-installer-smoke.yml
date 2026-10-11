@@ -186,7 +186,7 @@ jobs:
               environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if key in os.environ}
               environment.update(HOME=native_home, TMPDIR=str(temporary) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
                                  WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SOCIAL_DIR=str(profile / 'social'))
-              receipt.update(native_home_preserved=True, native_home_contents_accessed=False, isolated_data_dir=True,
+              receipt.update(native_home_preserved=True, no_home_inventory_performed=True, isolated_data_dir=True,
                              isolated_social_dir=True, owned_tmpdir=True)
               receipt['installed_app_exit_code'] = logged([str(executable)], 'installed-launch.log', timeout=240, environment=environment)
               require(not (profile / 'desktop-smoke-error.json').exists(), 'Installed smoke emitted an error receipt')
