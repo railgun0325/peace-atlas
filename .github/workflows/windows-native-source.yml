@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: __ROOT_APPROVED_MANIFEST_SHA256__
+      EXPECTED_MANIFEST_SHA256: 0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef
     steps:
       - name: Fetch the exact same-repository committed source
         env:
@@ -47,7 +47,7 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '__ROOT_APPROVED_SOURCE_SHA__':
+              if source_sha != 'fd836c6941756fd9262743309fc9fe4293a8185c':
                   raise ValueError('Only the root-approved correction source commit is supported')
               if tag != 'v2.0.0-fast-classification.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
