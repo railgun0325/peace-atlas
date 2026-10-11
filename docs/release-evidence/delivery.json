@@ -125,5 +125,17 @@
     "physical_disk_space_freed_not_claimed": true
   },
   "publication_boundary": "Installer construction, actual installation, formal startup and paid model acceptance are separate evidence scopes.",
-  "private_database_profiles_keys_cookies_account_text_or_local_absolute_paths_included": false
+  "private_database_profiles_keys_cookies_account_text_or_local_absolute_paths_included": false,
+  "publication": {
+    "release_id": 409863845,
+    "published": true,
+    "public_repository": true,
+    "latest_release_verified": true,
+    "approved_asset_count": 12,
+    "all_server_asset_sizes_and_sha256_matched": true,
+    "anonymous_page_access_and_bounded_installer_downloads_passed": true,
+    "bounded_download_bytes_per_asset": 512,
+    "release_url": "https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-binary-account-types.20261012",
+    "full_anonymous_large_asset_download_performed": false
+  }
 }

@@ -8,7 +8,7 @@
 
 [公开下载最新版](https://github.com/railgun0325/peace-atlas/releases/latest) · [全部 Releases](https://github.com/railgun0325/peace-atlas/releases) · [公开源代码](https://github.com/railgun0325/peace-atlas)
 
-仓库公开，下载已发布资产无需受邀账号。本轮标签为 `v2.0.0-binary-account-types.20261012`，应用源码提交为 `be315a35e7eefad0f26c58cc9a3e20f373df642e`；本轮 release 当前仍为草稿，最终发布后以发布页的实际文件及 SHA256 为准，上方 latest 链接指向已发布版本。公开页面可被搜索到，不是只有持链接的人才能访问。
+仓库公开，下载已发布资产无需受邀账号。本轮标签为 `v2.0.0-binary-account-types.20261012`，应用源码提交为 `be315a35e7eefad0f26c58cc9a3e20f373df642e`；本轮 release 已正式发布，以发布页的实际文件及 SHA256 为准，上方 latest 链接已指向本轮版本；不登录访问与安装包有界下载验证通过。公开页面可被搜索到，不是只有持链接的人才能访问。
 
 | 系统 | 安装入口 | 已验证范围 |
 | --- | --- | --- |

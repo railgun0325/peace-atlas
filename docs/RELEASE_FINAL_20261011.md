@@ -1,6 +1,6 @@
 # PEACE ATLAS 本轮交付记录：组织／个人二分类、自动审核与安装包
 
-本轮应用源码已冻结，完整回归 **3,403 项通过、0 失败，另 2 项 POSIX 权限测试在 Windows 按平台跳过**。Windows 安装器已构建、隔离启动并完成本机安装及数据保留验证；Mac PKG 已完成原生构建和实际安装启动验证。本轮 Windows 正式启动与新的 61 账号真实二分类任务尚未执行，待用户授权接入后独立验收；旧真实分类结果保留为历史。GitHub 仓库公开，本轮 release 仍为草稿，最终发布后停止，不开启下一轮优化。601 条材料的长报告仍未通过最终语义复核，明确保留为失败任务和草稿，不纳入已完成报告。
+本轮应用源码已冻结，完整回归 **3,403 项通过、0 失败，另 2 项 POSIX 权限测试在 Windows 按平台跳过**。Windows 安装器已构建、隔离启动并完成本机安装及数据保留验证；Mac PKG 已完成原生构建和实际安装启动验证。本轮 Windows 正式启动与新的 61 账号真实二分类任务尚未执行，待用户授权接入后独立验收；旧真实分类结果保留为历史。GitHub 仓库公开，本轮 release 已正式发布；安装包交付后不自动开启下一轮优化。601 条材料的长报告仍未通过最终语义复核，明确保留为失败任务和草稿，不纳入已完成报告。
 
 ## 账号分类与人工改正
 
@@ -43,9 +43,9 @@ Mac 本轮原生构建见 [run 38166632103](https://github.com/railgun0325/peace
 | Windows x64 Setup.exe | 307,429,973 | `3218d0f972851643ecaf9fde82ab84707364019f2076759df28efba2e919c8f7` |
 | macOS Apple Silicon PKG | 377,090,650 | `d776c1c4b32219efda75697568b7010d3724e776a9d13d30d9678d63a98f3732` |
 
-[完整操作说明](USER_MANUAL_20261010_AGENT.md)保留 20 部分和参数表，补充快速分类、人工锁定、审核范围、报告恢复、安装与分享；离线 HTML 在最终内容更新后发布。[Agent 接入](AGENT_INTEGRATION.md)提供支持 Codex／Claude Code／DSH 等宿主的通用 Skill 与清晰协议，授权连接仍由用户导出，安装 Skill 本身不授予数据访问。
+[完整操作说明](USER_MANUAL_20261010_AGENT.md)保留 20 部分和参数表，补充快速分类、人工锁定、审核范围、报告恢复、安装与分享；离线 HTML 已随本轮发布，包含 20 部分、27 个参数表，桌面和手机宽度实际渲染检查通过。[Agent 接入](AGENT_INTEGRATION.md)提供支持 Codex／Claude Code／DSH 等宿主的通用 Skill 与清晰协议，授权连接仍由用户导出，安装 Skill 本身不授予数据访问。
 
-[公开 GitHub 仓库](https://github.com/railgun0325/peace-atlas)及[最终下载入口](https://github.com/railgun0325/peace-atlas/releases/latest)可不登录访问；公开意味着没有链接的人也可能通过搜索找到，不能当作凭链接的保密分享。正式数据库、API Key、登录会话、本机 QA 与原帖材料不上传。固定发布标签为 `v2.0.0-binary-account-types.20261012`；本轮目前仍为草稿，最终资产验证后才发布，latest 下载入口指向已发布版本。
+[公开 GitHub 仓库](https://github.com/railgun0325/peace-atlas)及[最终下载入口](https://github.com/railgun0325/peace-atlas/releases/latest)可不登录访问；公开意味着没有链接的人也可能通过搜索找到，不能当作凭链接的保密分享。正式数据库、API Key、登录会话、本机 QA 与原帖材料不上传。固定发布标签为 `v2.0.0-binary-account-types.20261012`；本轮已正式发布，latest 下载入口已指向本轮版本，12 项资产全部与批准的大小及服务器 SHA256 一致。公开仓库、发布页和 latest 页面不登录访问均为 HTTP 200；Windows、Mac 安装器及 HTML 手册均通过不登录的有界下载和文件格式检查。
 
 ## 瘦身与停止边界
 
