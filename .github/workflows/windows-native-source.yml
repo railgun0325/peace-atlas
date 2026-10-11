@@ -1,10 +1,10 @@
-name: Build and verify private Windows recovery source
+name: Build and verify private Windows quality source
 
 on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: Full 40-character source commit containing the pinned recovery manifest
+        description: Full 40-character source commit containing the pinned quality manifest
         required: true
         type: string
       release_tag:
@@ -32,8 +32,8 @@ jobs:
       SOURCE_SHA: ${{ inputs.source_sha }}
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
-      # Root must replace this with the final v2 committed recovery source-manifest digest.
-      EXPECTED_MANIFEST_SHA256: b4ad7ce3a924307f485e9730a7e8d1b13caf26540c97ed9ddf786d189b245adc
+      # Root-approved public quality source-manifest digest; source commit remains a required input.
+      EXPECTED_MANIFEST_SHA256: 99192b5a559e39876f48f9051c678b6bd6791c034f272c2bfe449cda5015e7e7
     steps:
       - name: Fetch the exact same-repository committed source
         env:
@@ -47,6 +47,10 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
+              if source_sha != '51c1a1523918af92fce5d340e21d30729630ab6c':
+                  raise ValueError('Only the root-approved quality source commit is supported')
+              if tag != 'v2.0.0-foundation-quality.20261011':
+                  raise ValueError('Only the root-approved quality release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
               return source_sha, tag
@@ -55,7 +59,7 @@ jobs:
           source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
                                          os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
           if not re.fullmatch(r'[a-f0-9]{64}', os.environ['EXPECTED_MANIFEST_SHA256']):
-              raise SystemExit('Recovery workflow awaits the new root-approved manifest SHA-256')
+              raise SystemExit('Quality workflow awaits the new root-approved manifest SHA-256')
           if platform.system() != 'Windows' or platform.machine().lower() not in ('amd64', 'x86_64'):
               raise SystemExit('Native Windows x64 runner required')
           if sys.version_info < (3, 12):
@@ -69,6 +73,10 @@ jobs:
           repository = api('repos/' + repo)
           if repository.get('private') is not True:
               raise SystemExit('A private repository is required')
+          tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
+          tag_commit = tag_reference.get('object')
+          if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != source_sha:
+              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
           def find_draft_release(repo, tag):
               matches = []
               for page in range(1, 21):
@@ -102,10 +110,10 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/quality-source-manifest-20261011.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
-              raise SystemExit('The committed recovery source manifest differs from the prepared release freeze')
+              raise SystemExit('The committed quality source manifest differs from the prepared release freeze')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
           if manifest.get('freeze_format_version') != 2 or not isinstance(manifest['targets'].get('windows-x64'), int) or manifest['targets']['windows-x64'] <= 0 or len(manifest['target_files']['windows-x64']) != manifest['targets']['windows-x64']:
               raise SystemExit('Unexpected recovery target manifest')
@@ -146,7 +154,7 @@ jobs:
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
           evidence = root / 'evidence'
-          manifest_path = source / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/quality-source-manifest-20261011.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The pinned source manifest changed before build')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -154,7 +162,7 @@ jobs:
           spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
           builder = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(builder)
-          if builder.ARTIFACT_SUFFIX != '-foundation-recovery-20261011':
+          if builder.ARTIFACT_SUFFIX != '-foundation-quality-20261011':
               raise SystemExit('The recovery builder suffix is required')
           actual_sources = builder.application_files('windows-x64')
           actual = {name: hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() for path, name in actual_sources}
@@ -177,7 +185,7 @@ jobs:
           dist = (source / 'dist').resolve(strict=True)
           if not archive.is_relative_to(dist) or not portable.is_relative_to(dist) or not portable.is_dir():
               raise SystemExit('Build artifacts escaped the owned checkout dist')
-          if archive.name != 'PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011.zip' or not portable.name.startswith('PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011-'):
+          if archive.name != 'PEACE-ATLAS-2.0.0-windows-x64-foundation-quality-20261011.zip' or not portable.name.startswith('PEACE-ATLAS-2.0.0-windows-x64-foundation-quality-20261011-'):
               raise SystemExit('Windows archive/portable suffix differs')
           archive_sha = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
           if archive_sha != result['sha256'] or archive.stat().st_size != result['size_bytes']:
@@ -368,7 +376,7 @@ jobs:
               raise SystemExit('Both private offline browser modes must pass')
           if pathlib.Path(browser['python']).resolve(strict=True) != python.resolve(strict=True) or not pathlib.Path(browser['executable']).resolve(strict=True).is_relative_to((resources / 'browsers').resolve(strict=True)):
               raise SystemExit('Browser smoke used a host interpreter/browser')
-          manifest_path = source / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/quality-source-manifest-20261011.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('Committed manifest changed during acceptance')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -378,7 +386,7 @@ jobs:
           result = json.loads((evidence / 'build-result.json').read_text(encoding='utf-8'))
           assets = root / 'release-assets'
           assets.mkdir()
-          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-foundation-quality-20261011-native-' + os.environ['SOURCE_SHA'][:12]
                         + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           source_receipt = json.loads((evidence / 'source-receipt.json').read_text(encoding='utf-8'))
           acceptance = {**source_receipt, 'ok': True, 'native_accepted_archive': asset_name, 'native_accepted_archive_sha256': result['sha256'],
@@ -421,12 +429,16 @@ jobs:
           release = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
           if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
               raise SystemExit('The same private draft must still exist')
+          tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
+          tag_commit = tag_reference.get('object')
+          if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != os.environ['SOURCE_SHA']:
+              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
           archive = pathlib.Path(os.environ['RAW_ARCHIVE']).resolve(strict=True)
           source_dist = (pathlib.Path(os.environ['SOURCE_DIR']) / 'dist').resolve(strict=True)
           if not archive.is_relative_to(source_dist) or hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_accepted_archive_sha256']:
               raise SystemExit('The exact native-tested ZIP changed before upload')
           asset_name = accepted['native_accepted_archive']
-          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-foundation-recovery-20261011-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
+          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-foundation-quality-20261011-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
               raise SystemExit('Unexpected candidate asset name')
           assets = root / 'release-assets'
           sidecars = [assets / (asset_name + '.sha256'), assets / (asset_name + '.acceptance.json')]
