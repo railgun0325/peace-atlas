@@ -27,15 +27,15 @@ jobs:
           import xml.etree.ElementTree as ET
 
           REPO = 'railgun0325/peace-atlas'
-          SOURCE = 'fd836c6941756fd9262743309fc9fe4293a8185c'
-          TAG = 'v2.0.0-fast-classification.20261012'
-          RELEASE_ID = 409797451
-          FREEZE_SHA = '0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef'
-          MANIFEST_SHA = '5da077876311ca63b14319f10c0a325892e7ee501c275aee83bbf792cc0c77d4'
-          PKG_SHA = '6566b1e4922074ddb0b389fafcd34ec7e38509abab4d6c1f8f7f234ac9a94ba8'
-          ZIP_SHA = '3bca66bca630357b89582b12a5e25b5de90f34006dd29335e5fb9234c1291b2c'
-          NATIVE_SHA = 'bcff7d04e731992e2d7661ec940bc986bd703e7b38ee4ab8187c62f8430845a0'
-          STEM = 'PEACE-ATLAS-2.0.0-macos-arm64-fast-classification-20261012-native-fd836c694175-run38157424049-1'
+          SOURCE = '5a4d74509c7482beb042b3ad5837eb2a78d06ab3'
+          TAG = 'v2.0.0-fast-classification-fixed.20261012'
+          RELEASE_ID = 409826860
+          FREEZE_SHA = 'f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa'
+          MANIFEST_SHA = 'a96cc3aee32773dad5e105bb10c4b4570089f4223df13648a1e9c6177cc159be'
+          PKG_SHA = 'f69c02e14558f9412c8605d62c8bcdba0cb6e610ae6034b8b05421162544bc99'
+          ZIP_SHA = '1379ab4d706a09a86c1e9f0caf829d92a777e4e8bcd249af8282d59465c34fa7'
+          NATIVE_SHA = 'd0846af6124c1f655cf7c66e433febcff4ed136e69af0a244baa65bdaf6bce53'
+          STEM = 'PEACE-ATLAS-2.0.0-macos-arm64-fast-classification-20261012-native-5a4d74509c74-run38161689870-1'
           ALLOWED_SIGNED = {
               'harness/node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node',
               'harness/node_modules/node-addon-require-builtin-darwin-arm64/prebuilt/darwin-arm64-napi-v9.node',
@@ -186,9 +186,9 @@ jobs:
               receipt['release_was_draft'] = release.get('draft')
               assets = release['assets']
               save('download-fixed-inputs')
-              pkg = download(631287968, STEM + '.pkg', PKG_SHA, 377088196, assets)
-              native_file = download(631287975, STEM + '.zip.acceptance.json', NATIVE_SHA, 3862, assets)
-              builder_file = download(631287969, STEM + '.pkg.json', '3266eceb8fc11b44e273c6fab4def2ec12871758417b39042098adafc13cbbd9', 814, assets)
+              pkg = download(631419873, STEM + '.pkg', PKG_SHA, 377089139, assets)
+              native_file = download(631419875, STEM + '.zip.acceptance.json', NATIVE_SHA, 3868, assets)
+              builder_file = download(631419874, STEM + '.pkg.json', '7ceb9d763105a3dee9c244294751228d01a6f0be0698ca499dea697cad6ed6f9', 814, assets)
               freeze_file = root / 'source-manifest.json'
               with freeze_file.open('wb') as output:
                   subprocess.run(['gh', 'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json',
