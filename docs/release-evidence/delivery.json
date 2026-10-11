@@ -1,61 +1,112 @@
 {
-  "format": "peace-atlas-current-delivery-v1",
-  "release_tag": "v2.0.0-fast-classification-fixed.20261012",
-  "application_source_commit": "5a4d74509c7482beb042b3ad5837eb2a78d06ab3",
-  "source_manifest_sha256": "f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa",
-  "source_tests_sha256": "c06b3fd280b5c46a95428bb2e000ffc077fdc63468b70f57c86ce94096bcea03",
+  "format": "peace-atlas-current-delivery-v2",
+  "release_tag": "v2.0.0-binary-account-types.20261012",
+  "application_source_commit": "be315a35e7eefad0f26c58cc9a3e20f373df642e",
+  "source_manifest_sha256": "6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e",
+  "source_tests_sha256": "1a4394ea955211f51501b5b3e1c6abb94567883692cd8dd616f198cc17f65ce2",
   "source_tests": {
-    "passed": 3392,
+    "passed": 3403,
     "failed": 0,
     "windows_posix_tests_skipped": 2,
-    "posix_permissions_exercised_separately": true
+    "model_scope": "controlled fixtures; formal runs recorded separately"
   },
   "windows": {
     "installer_file": "PEACE-ATLAS-2.0.0-Windows-x64-Setup.exe",
-    "installer_sha256": "96099ffa8e8d30c7fb7bf092ede9189b568558be339c1e077f4a7176836d0212",
-    "installer_bytes": 307364458,
+    "installer_sha256": "3218d0f972851643ecaf9fde82ab84707364019f2076759df28efba2e919c8f7",
+    "installer_bytes": 307429973,
     "actual_install_exit_code": 0,
     "installed_payload_hashes_matched": 8760,
     "desktop_entrypoints_verified": 3,
-    "formal_startup_verified": true,
-    "research_tables_unchanged_after_upgrade_and_startup": 23,
+    "formal_startup_verified": false,
+    "research_tables_unchanged_after_upgrade": 23,
+    "research_tables_unchanged_after_startup": null,
+    "isolated_native_startup_verified": true,
     "signing": "unsigned",
     "user_data_backup_created": true
   },
   "macos_arm64": {
-    "actual_system": "macOS 15.7.9 ARM64",
-    "declared_minimum": "macOS 13",
-    "pkg_sha256": "f69c02e14558f9412c8605d62c8bcdba0cb6e610ae6034b8b05421162544bc99",
-    "pkg_bytes": 377089139,
-    "native_build_run": "https://github.com/railgun0325/peace-atlas/actions/runs/38161689870",
-    "actual_installer_run": "https://github.com/railgun0325/peace-atlas/actions/runs/38162629225",
+    "ok": true,
+    "application_source_commit": "be315a35e7eefad0f26c58cc9a3e20f373df642e",
+    "release_tag": "v2.0.0-binary-account-types.20261012",
+    "release_id": 409863845,
+    "actual_installer_run_id": 38167653396,
+    "actual_installer_run_url": "https://github.com/railgun0325/peace-atlas/actions/runs/38167653396",
+    "installer_workflow_commit": "5612c99081a52e241fe1523ad041bb42177fb388",
+    "installer_workflow_sha256": "94f0ac4ed6cc3944310cb004218df83dfae4cfd409879a27890ba64de203f889",
+    "pkg_sha256": "d776c1c4b32219efda75697568b7010d3724e776a9d13d30d9678d63a98f3732",
+    "source_manifest_sha256": "6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e",
+    "installed_application_manifest_sha256": "99450755d9bad2c8deece5f4f43782fae378bfc62b0b4fa64bc9c5645e08b8b6",
     "actual_install_completed": true,
+    "installed_application_path": "/Applications/PEACE ATLAS.app",
+    "installed_entrypoint": "/Applications/PEACE ATLAS.app/Contents/MacOS/PEACE ATLAS",
     "installed_startup_exit_code": 0,
     "frozen_application_members_matching_pkg_payload": 3145,
     "normal_user_deep_strict_codesign_before_and_after_startup": true,
     "secure_storage_roundtrip_passed": true,
-    "application_signing": "native ad-hoc",
-    "installer_signing": "unsigned",
-    "apple_notarization": false,
-    "gatekeeper_or_quarantine_changed": false,
-    "intel_package_available": false
+    "installed_backend_health": {
+      "ok": true,
+      "version": "2.0.0",
+      "status": "ready",
+      "storage": "sqlite",
+      "timezone": "Asia/Tokyo"
+    },
+    "backend_shutdown_clean": true,
+    "system": {
+      "name": "macOS",
+      "version": "15.7.9",
+      "architecture": "arm64"
+    },
+    "native_build_run_id": 38166632103,
+    "allowed_signed_application_members": [
+      "harness/node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node",
+      "harness/node_modules/node-addon-require-builtin-darwin-arm64/prebuilt/darwin-arm64-napi-v9.node"
+    ],
+    "signature": {
+      "installer": "unsigned",
+      "application": "native ad-hoc",
+      "notarization_performed": false
+    },
+    "quarantine_or_gatekeeper_changes": false,
+    "formal_user_profile_accessed": false,
+    "optional_network_or_paid_smokes_requested": false,
+    "byte_verification_scope": "Fixed PKG digest and all 3145 frozen application members match accepted payload; bundled runtime integrity is verified by normal-user deep strict codesign.",
+    "artifact": {
+      "id": 11712303096,
+      "bytes": 98696,
+      "sha256": "e904d6d5abffeaa2c50a2c5f7dd567218daa60c18b55959f739df88fcfd12b38",
+      "github_server_digest_matched": true
+    },
+    "startup_screenshot": {
+      "name": "installed-startup.png",
+      "sha256": "bfcbf7f76d3db3bf6b5af11c73d747a4dd6a36906825f539cc2dd6f4f2f775a9",
+      "dimensions": [
+        1024,
+        656
+      ],
+      "visually_viewed": true,
+      "observation": "Installed overview is visible; native service connected; empty isolated profile; Chinese text is readable."
+    },
+    "raw_runner_receipts_modified": false
   },
-  "real_fast_classification": {
+  "historical_real_fast_classification": {
     "receipt": "fast-classification.json",
     "receipt_sha256": "dfbbe980a511420195a9c40afd4fe145ad0ed6133905cf9b8c03e5baa665ada8",
-    "completed": 61,
-    "seconds": 12.835229,
-    "reserved_model_requests": 1,
-    "transport_retries": 0,
-    "tool_calls": 0,
-    "type_counts": {
-      "unknown": 23,
-      "organization": 23,
-      "individual": 15
-    },
-    "identity_statuses_unchanged": true,
-    "source_relationship_activity_research_content_unchanged": true,
-    "interpretation": "Approximate account publisher form, manually correctable; not independently verified identity or affiliation"
+    "is_current_binary_acceptance": false
+  },
+  "real_binary_classification": {
+    "receipt": "binary-classification.json",
+    "receipt_sha256": "aebd803140a1e5ea4237b43f39b290ae902fe24cc0c582320d4bd9cb20a15ec3",
+    "status": "not_run_awaiting_exported_agent_connection",
+    "type_counts": null,
+    "job": null,
+    "interpretation": "Approximate publishing-account type only; no inferred membership or independent identity verification"
+  },
+  "manual": {
+    "sections": 20,
+    "parameter_tables": 27,
+    "html_file": "PEACE-ATLAS-user-manual-20261012.html",
+    "html_sha256": "fa443d6e963bddb8577d484788c26c0eec543f57f0bb45948d66f65126700c11",
+    "desktop_and_mobile_file_protocol_checked": true
   },
   "long_report_limit": {
     "original_input_records": 601,
@@ -65,6 +116,14 @@
     "reason": "Final semantic review rejected missing profile-text mention coverage and incorrect citations for program execution metadata",
     "saved_reading_fragments_evidence_notes_and_drafts_retained": true
   },
-  "publication_boundary": "Installer construction, actual installation and data-preserving upgrade are separate proofs; this receipt does not claim an external download has succeeded.",
+  "cleanup": {
+    "redundant_tracked_files_removed": 53,
+    "removed_tracked_logical_bytes": 11440767,
+    "old_local_build_targets_recycled": 47,
+    "recycled_logical_bytes": 26015471115,
+    "recycle_bin_emptied": false,
+    "physical_disk_space_freed_not_claimed": true
+  },
+  "publication_boundary": "Installer construction, actual installation, formal startup and paid model acceptance are separate evidence scopes.",
   "private_database_profiles_keys_cookies_account_text_or_local_absolute_paths_included": false
 }

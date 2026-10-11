@@ -1,0 +1,15 @@
+{
+  "status": "not_run_awaiting_exported_agent_connection",
+  "application_source_commit": "be315a35e7eefad0f26c58cc9a3e20f373df642e",
+  "source_manifest_sha256": "6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e",
+  "new_binary_classification_model_job_created": false,
+  "reason": "Desktop control remains stopped by physical Escape; an explicitly exported Agent connection is required for interface execution.",
+  "binary_type_contract": [
+    "organization",
+    "individual"
+  ],
+  "legacy_unknown_display": "individual; original historical audit metadata retained",
+  "historical_real_classification_receipt": "fast-classification.json",
+  "historical_result_is_current_binary_acceptance": false,
+  "contains_account_names_handles_urls_bios_or_model_reasons": false
+}
