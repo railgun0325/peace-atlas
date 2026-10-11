@@ -60,7 +60,7 @@ jobs:
               raise SystemExit('Native Windows x64 runner required')
           if sys.version_info < (3, 12):
               raise SystemExit('Runner Python 3.12 or later is required for safe tar extraction')
-          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           root.mkdir(exist_ok=False)
           evidence = root / 'evidence'
           evidence.mkdir()
@@ -120,6 +120,13 @@ jobs:
                   raise SystemExit('Committed application source differs: ' + name)
           if hashlib.file_digest((checkout / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
               raise SystemExit('Committed builder differs from the source freeze')
+          # Keep verified source in a short owned path for Windows native DLL loading.
+          owned_root = root.resolve(strict=True)
+          verified_checkout = checkout.resolve(strict=True)
+          short_checkout = root / 'src'
+          if verified_checkout.parent != (root / 'source').resolve(strict=True) or not verified_checkout.is_relative_to(owned_root) or short_checkout.exists() or short_checkout.parent.resolve(strict=True) != owned_root:
+              raise SystemExit('Source relocation must stay inside the fresh owned staging root')
+          checkout = verified_checkout.rename(short_checkout).resolve(strict=True)
           receipt = {'repository': repo, 'source_sha': source_sha, 'source_tree_sha': commit['commit']['tree']['sha'],
                      'source_archive_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(),
                      'source_manifest_sha256': manifest_sha, 'application_union_count': len(manifest['files']),
@@ -136,7 +143,7 @@ jobs:
         run: |
           @'
           import hashlib, importlib.util, json, os, pathlib, stat, subprocess, sys, zipfile
-          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
           evidence = root / 'evidence'
           manifest_path = source / 'docs/release-evidence/recovery-source-manifest-20261011.json'
@@ -269,7 +276,7 @@ jobs:
         run: |
           @'
           import hashlib, json, os, pathlib, struct, subprocess
-          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           evidence = root / 'evidence'
           portable = pathlib.Path(os.environ['PORTABLE_DIR']).resolve(strict=True)
           source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
@@ -400,7 +407,7 @@ jobs:
         run: |
           @'
           import hashlib, json, os, pathlib, re, subprocess
-          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           repo, tag = os.environ['GITHUB_REPOSITORY'], os.environ['RELEASE_TAG']
           if repo != os.environ['EXPECTED_REPOSITORY'] or not re.fullmatch(r'[a-f0-9]{40}', os.environ['SOURCE_SHA']):
               raise SystemExit('Repository or source input changed')
@@ -461,14 +468,14 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
           path: |
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/*.json
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/*.log
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-smoke*.json
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-smoke.png
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-eva-*.png
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-budget-*.png
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-backup-controls.png
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/logs/desktop.log
-            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/logs/backend.log
-            ${{ runner.temp }}/peace-atlas-windows-source/release-assets/*.sha256
-            ${{ runner.temp }}/peace-atlas-windows-source/release-assets/*.acceptance.json
+            ${{ runner.temp }}/pa-win/evidence/*.json
+            ${{ runner.temp }}/pa-win/evidence/*.log
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/desktop-smoke*.json
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/desktop-smoke.png
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/desktop-eva-*.png
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/desktop-budget-*.png
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/desktop-backup-controls.png
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/logs/desktop.log
+            ${{ runner.temp }}/pa-win/evidence/isolated-profile/logs/backend.log
+            ${{ runner.temp }}/pa-win/release-assets/*.sha256
+            ${{ runner.temp }}/pa-win/release-assets/*.acceptance.json
