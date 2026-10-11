@@ -224,6 +224,409 @@ jobs:
         run: |
           python3 - <<'PY'
           import hashlib, json, os, pathlib, platform, plistlib, re, shutil, sqlite3, stat, subprocess, time
+          """CI-only diagnostic monitor. Never changes application or OS security settings."""
+          import ctypes
+          import datetime
+          import json
+          import os
+          from pathlib import Path
+          import platform
+          import re
+          import stat
+          import subprocess
+          import tempfile
+          import time
+
+
+          class DiagnosticGuardError(Exception):
+              """An ownership/capability check failed; diagnostic sampling must not run."""
+
+
+          def owned_path(path, root, *, directory=False, fresh_ns=None):
+              path, root = Path(path), Path(root)
+              try:
+                  if path.is_symlink() or root.is_symlink():
+                      raise DiagnosticGuardError('symlink')
+                  resolved_root = root.resolve(strict=True)
+                  resolved = path.resolve(strict=True)
+                  resolved.relative_to(resolved_root)
+                  current = path
+                  while current != root:
+                      if current.is_symlink():
+                          raise DiagnosticGuardError('symlink_ancestor')
+                      if current.parent == current:
+                          raise DiagnosticGuardError('outside_owned_root')
+                      current = current.parent
+                  info = path.stat()
+                  expected = stat.S_ISDIR if directory else stat.S_ISREG
+                  if not expected(info.st_mode):
+                      raise DiagnosticGuardError('nonregular_owned_path')
+                  if hasattr(os, 'getuid') and info.st_uid != os.getuid():
+                      raise DiagnosticGuardError('wrong_file_uid')
+                  if fresh_ns is not None and info.st_mtime_ns < fresh_ns:
+                      raise DiagnosticGuardError('stale_owned_file')
+                  return resolved
+              except (OSError, ValueError) as error:
+                  raise DiagnosticGuardError('unavailable_owned_path') from error
+
+
+          def ready_candidate(native_tmp, launch_ns):
+              """Only the foreground finalizer smoke profile, never concluding-open profiles."""
+              root = Path(native_tmp)
+              audits = list(root.glob('peace-atlas-sign.*'))
+              if not audits:
+                  return None
+              if len(audits) != 1:
+                  raise DiagnosticGuardError('ambiguous_audit')
+              audit = audits[0]
+              owned_path(audit, root, directory=True, fresh_ns=launch_ns)
+              smoke = audit / 'smoke'
+              if not smoke.exists():
+                  return None
+              owned_path(smoke, root, directory=True, fresh_ns=launch_ns)
+              ready_files = list(smoke.glob('ready-*.json'))
+              if not ready_files:
+                  return None
+              if len(ready_files) != 1:
+                  raise DiagnosticGuardError('ambiguous_ready')
+              ready = ready_files[0]
+              match = re.fullmatch(r'ready-([1-9][0-9]{0,9})\.json', ready.name)
+              if not match:
+                  raise DiagnosticGuardError('invalid_main_pid_filename')
+              owned_path(ready, root, fresh_ns=launch_ns)
+              if ready.stat().st_size > 1024:
+                  raise DiagnosticGuardError('oversized_ready')
+              try:
+                  body = json.loads(ready.read_text(encoding='utf-8'))
+              except (ValueError, OSError):
+                  return None  # A partially written ready file can be observed before completion.
+              if not isinstance(body, dict) or type(body.get('port')) is not int or not 1 <= body['port'] <= 65535:
+                  raise DiagnosticGuardError('invalid_ready_body')
+              desktop_log = smoke / 'logs' / 'desktop.log'
+              if not desktop_log.exists():
+                  return None
+              owned_path(desktop_log, root, fresh_ns=launch_ns)
+              if desktop_log.stat().st_size > 1024 * 1024:
+                  raise DiagnosticGuardError('oversized_desktop_log')
+              try:
+                  text = desktop_log.read_text(encoding='utf-8', errors='replace')
+              except OSError as error:
+                  raise DiagnosticGuardError('desktop_log_unavailable') from error
+              if not any(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z Application ready', line) for line in text.splitlines()):
+                  return None
+              return {'pid': int(match[1]), 'audit': audit, 'smoke': smoke, 'ready': ready}
+
+
+          class ProcBsdInfo(ctypes.Structure):
+              # Darwin bsd/sys/proc_info.h: PROC_PIDTBSDINFO. Names/argv are never decoded.
+              _fields_ = ([(name, ctypes.c_uint32) for name in (
+                  'flags', 'status', 'exit_status', 'pid', 'ppid', 'uid', 'gid', 'ruid', 'rgid', 'saved_uid', 'saved_gid', 'reserved')]
+                  + [('comm', ctypes.c_char * 16), ('name', ctypes.c_char * 32)]
+                  + [(name, ctypes.c_uint32) for name in ('file_count', 'pgid', 'job_count', 'tty_device', 'tty_pgid')]
+                  + [('nice', ctypes.c_int32), ('start_seconds', ctypes.c_uint64), ('start_microseconds', ctypes.c_uint64)])
+
+
+          class MacProcesses:
+              def __init__(self, deadline=None):
+                  self.deadline = deadline
+                  if platform.system() != 'Darwin' or os.geteuid() != os.getuid():
+                      raise DiagnosticGuardError('unsupported_or_elevated_platform')
+                  try:
+                      self.lib = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+                      self.lib.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+                      self.lib.proc_pidpath.restype = ctypes.c_int
+                      self.lib.proc_listchildpids.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+                      self.lib.proc_listchildpids.restype = ctypes.c_int
+                      self.lib.proc_pidinfo.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+                      self.lib.proc_pidinfo.restype = ctypes.c_int
+                      if ctypes.sizeof(ProcBsdInfo) != 136:
+                          raise DiagnosticGuardError('unexpected_native_process_structure_size')
+                  except (OSError, AttributeError) as error:
+                      raise DiagnosticGuardError('libproc_unavailable') from error
+
+              def identity(self, pid):
+                  if type(pid) is not int or pid <= 1:
+                      raise DiagnosticGuardError('invalid_pid')
+                  if self.deadline is not None and time.monotonic() >= self.deadline:
+                      raise DiagnosticGuardError('original_deadline_reached_before_metadata')
+                  info = ProcBsdInfo()
+                  returned = self.lib.proc_pidinfo(pid, 3, 0, ctypes.byref(info), ctypes.sizeof(info))
+                  if returned != ctypes.sizeof(info) or info.pid != pid or info.start_seconds == 0 or info.start_microseconds >= 1000000:
+                      raise DiagnosticGuardError('invalid_or_unavailable_process_metadata')
+                  buffer = ctypes.create_string_buffer(4096)
+                  length = self.lib.proc_pidpath(pid, buffer, len(buffer))
+                  if length <= 0 or length >= len(buffer) - 1:
+                      raise DiagnosticGuardError('process_path_unavailable_or_truncated')
+                  try:
+                      executable = buffer.value.decode('utf-8', errors='strict')
+                  except UnicodeError as error:
+                      raise DiagnosticGuardError('invalid_process_path') from error
+                  return {name: int(getattr(info, name)) for name in ('pid', 'ppid', 'uid', 'pgid', 'start_seconds', 'start_microseconds')} | {'executable': executable}
+
+              def children(self, pid):
+                  ids = (ctypes.c_int * 256)()
+                  ctypes.set_errno(0)
+                  count = self.lib.proc_listchildpids(pid, ids, ctypes.sizeof(ids))
+                  if count < 0 or count >= len(ids) or (count == 0 and ctypes.get_errno() != 0):
+                      raise DiagnosticGuardError('child_inventory_unavailable_or_truncated')
+                  return [self.identity(ids[index]) for index in range(count) if ids[index] > 1]
+
+
+          def verify_main(reader, pid, finalizer_pid, executable, uid, previous=None):
+              first = reader.identity(pid)
+              second = reader.identity(pid)
+              if first != second or (previous is not None and first != previous):
+                  raise DiagnosticGuardError('pid_identity_changed')
+              if first['uid'] != uid or first['ppid'] != finalizer_pid or first['pgid'] != finalizer_pid:
+                  raise DiagnosticGuardError('process_ownership_mismatch')
+              if first['executable'] != str(executable):
+                  raise DiagnosticGuardError('wrong_main_executable')
+              return first
+
+
+          def process_receipt(identity, executable, children):
+              """Never save argv, environment, unknown executable paths, or other processes."""
+              parent = {key: identity[key] for key in ('pid', 'ppid', 'uid', 'pgid', 'start_seconds', 'start_microseconds')}
+              parent['executable'] = 'native-app/PEACE ATLAS.app/Contents/MacOS/PEACE ATLAS'
+              app_root = executable.parents[2]
+              saved, excluded = [], 0
+              for child in children:
+                  if child['ppid'] != identity['pid'] or child['uid'] != identity['uid'] or child['pgid'] != identity['pgid']:
+                      excluded += 1
+                      continue
+                  try:
+                      relative = Path(child['executable']).relative_to(app_root)
+                  except ValueError:
+                      excluded += 1
+                      continue
+                  row = {key: child[key] for key in ('pid', 'ppid', 'uid', 'pgid', 'start_seconds', 'start_microseconds')}
+                  row['executable'] = 'PEACE ATLAS.app/' + str(relative)
+                  saved.append(row)
+              return {'main': parent, 'direct_children': saved, 'excluded_direct_children': excluded}
+
+
+          def sanitize_sample(text):
+              """Retain stack graph only. Discard headers, paths, Binary Images, argv, and env."""
+              lines, graph, retained_frames = [], False, 0
+              images = {'PEACE ATLAS', 'dyld', 'Electron Framework', 'Security', 'CoreFoundation', 'Foundation', 'AppKit', 'CoreServices',
+                        'libsystem_kernel.dylib', 'libsystem_pthread.dylib', 'libsystem_c.dylib', 'libdispatch.dylib',
+                        'libobjc.A.dylib', 'libsystem_platform.dylib', 'libxpc.dylib', 'libsystem_blocks.dylib',
+                        'HIToolbox', 'libsystem_malloc.dylib', 'libsystem_trace.dylib', 'Python', 'python3.11'}
+              public_password_symbols = {'SecKeychainFindGenericPassword', 'SecKeychainFindInternetPassword',
+                                         'SecKeychainAddGenericPassword', 'SecKeychainAddInternetPassword'}
+              for line in text.splitlines():
+                  if line.strip() == 'Call graph:':
+                      graph = True
+                      lines.append('Call graph:')
+                      continue
+                  if not graph:
+                      continue
+                  if line.lstrip().startswith(('Total number in stack', 'Sort by top', 'Binary Images:')):
+                      break
+                  if len(line) > 1600:
+                      continue
+                  thread = re.match(r'^\s*(\d+)\s+Thread_(\d+)(?:\s|$)', line)
+                  if thread:
+                      lines.append('    ' + thread[1] + ' Thread_' + thread[2] + ' [thread label omitted]')
+                      continue
+                  frame = re.fullmatch(r'(\s*[+!|: ]*)(\d+)\s+(.{1,512}?)\s+\(in ([A-Za-z0-9_. -]{1,64})\)(?:\s+\+\s+(\d+))?(?:\s+\[(0x[0-9a-fA-F]+)\])?\s*', line)
+                  if not frame or frame[4] not in images:
+                      continue
+                  symbol = frame[3]
+                  if not re.fullmatch(r'[A-Za-z_$?][A-Za-z0-9_$:.<>~(), *&+\[\]-]*', symbol):
+                      continue
+                  if symbol not in public_password_symbols and re.search(r'token|secret|password|authorization|credential|bearer|gh[pousr]_|github_pat_|sk-', symbol, re.I):
+                      symbol = '[sensitive symbol omitted]'
+                  lines.append(frame[1] + frame[2] + ' ' + symbol + ' (in ' + frame[4] + ')' + (' + ' + frame[5] if frame[5] else '') + (' [' + frame[6] + ']' if frame[6] else ''))
+                  retained_frames += 1
+                  if sum(map(len, lines)) > 256 * 1024:
+                      break
+              return '\n'.join(lines) + '\n' if retained_frames else ''
+
+
+          def run_native_finalizer_diagnostics(stage, evidence, native_tmp, env, timeout=1200):
+              """Same finalizer command and deadline; one optional owned main-process sample."""
+              if timeout != 1200:
+                  raise DiagnosticGuardError('original_deadline_must_be_preserved')
+              stage, evidence, native_tmp = map(Path, (stage, evidence, native_tmp))
+              runner_root = evidence.parent
+              for directory in (stage, evidence, native_tmp):
+                  owned_path(directory, runner_root, directory=True)
+              executable = stage / 'PEACE ATLAS.app/Contents/MacOS/PEACE ATLAS'
+              owned_path(executable, stage)
+              finalizer_script = stage / 'Finalize PEACE ATLAS.command'
+              owned_path(finalizer_script, stage)
+              if not executable.stat().st_mode & stat.S_IXUSR:
+                  raise DiagnosticGuardError('main_executable_not_executable')
+              # CI currently uses this exact allowlist, deliberately omitting every Actions credential.
+              allowed_env = {'PATH', 'LANG', 'LC_ALL', 'SHELL', 'HOME', 'TMPDIR', 'PYTHONUTF8', 'PYTHONDONTWRITEBYTECODE', 'WORKBENCH_SMOKE_EXIT', 'WORKBENCH_DATA_DIR'}
+              if set(env) - allowed_env or env.get('WORKBENCH_SMOKE_EXIT') != '1':
+                  raise DiagnosticGuardError('unexpected_finalizer_environment')
+              for name, expected in (('HOME', evidence / 'owned-home'), ('TMPDIR', native_tmp),
+                                     ('WORKBENCH_DATA_DIR', evidence / 'finalizer-post-open-profile')):
+                  if Path(env.get(name, '')).resolve() != expected.resolve():
+                      raise DiagnosticGuardError('unexpected_finalizer_owned_profile')
+                  owned_path(expected, evidence, directory=True)
+              args = ['bash', str(finalizer_script), '--smoke']
+              started, launch_ns = time.monotonic(), time.time_ns()
+              deadline = started + timeout
+              receipt = {'version': 1, 'original_deadline_seconds': timeout, 'sample_duration_seconds': 5,
+                         'sample_interval_milliseconds': 10, 'sampling_attempts': 0, 'sampling_status': 'waiting_ready',
+                         'runtime_sampling_permission': 'not_verified', 'argv_or_environment_saved': False,
+                         'timeline': [], 'application_result': 'running',
+                         'pid_attachment_limit': 'PID-based sample has a narrow non-atomic reuse race; changed identities discard the report'}
+              seen = set()
+              def event(name, **values):
+                  receipt['timeline'].append(dict(event=name, utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                                                  elapsed_seconds=round(time.monotonic() - started, 3), **values))
+                  try:
+                      (evidence / 'native-finalizer-diagnostics.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+                  except OSError:
+                      receipt['diagnostic_receipt_write_errors'] = receipt.get('diagnostic_receipt_write_errors', 0) + 1
+              event('monitor_started')
+              reader, sampler, private_dir, main_identity = None, None, None, None
+              sampler_cleanup_deadline = None
+              def cleanup_private_report():
+                  nonlocal private_dir
+                  if private_dir is not None:
+                      try:
+                          private_dir.cleanup()
+                      except OSError:
+                          # Remnant is inside an owned private directory excluded by all artifact globs.
+                          receipt['private_report_cleanup_errors'] = receipt.get('private_report_cleanup_errors', 0) + 1
+                          event('private_report_cleanup_unavailable')
+                      private_dir = None
+              candidate, fatal_guard = None, False
+              try:
+                  reader = MacProcesses(deadline)
+              except DiagnosticGuardError as error:
+                  receipt['sampling_status'] = str(error)
+                  fatal_guard = True
+                  event('sampling_capability_unavailable', reason=str(error))
+              with (evidence / 'native-finalizer.log').open('w') as log:
+                  finalizer = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True)
+                  event('finalizer_started', pid=finalizer.pid)
+                  try:
+                      while finalizer.poll() is None:
+                          if time.monotonic() >= deadline:
+                              receipt['application_result'] = 'timeout'
+                              event('original_finalizer_deadline_reached')
+                              # Same immediate-child termination boundary as subprocess.run(timeout=1200).
+                              finalizer.kill()
+                              finalizer.wait()
+                              raise subprocess.TimeoutExpired(args, timeout)
+                          for phrase, stage_name in (
+                              ('Signing PEACE ATLAS locally.', 'local_signing_started'),
+                              ('Ad-hoc integrity signature verified.', 'adhoc_signature_verified_before_smoke')):
+                              if stage_name not in seen:
+                                  output_path = evidence / 'native-finalizer.log'
+                                  try:
+                                      log.flush()
+                                      if output_path.stat().st_size <= 1024 * 1024 and phrase in output_path.read_text(encoding='utf-8', errors='replace'):
+                                          seen.add(stage_name)
+                                          event(stage_name)
+                                  except OSError:
+                                      seen.add(stage_name)
+                                      event('finalizer_output_observation_unavailable', stage=stage_name)
+                          if not fatal_guard and candidate is None:
+                              try:
+                                  candidate = ready_candidate(native_tmp, launch_ns)
+                                  if candidate:
+                                      event('foreground_ready_and_application_ready', main_pid=candidate['pid'])
+                              except (DiagnosticGuardError, OSError) as error:
+                                  receipt['sampling_status'] = str(error) if isinstance(error, DiagnosticGuardError) else 'ready_observation_unavailable'
+                                  fatal_guard = True
+                                  event('sampling_guard_rejected', reason=receipt['sampling_status'])
+                          if candidate:
+                              for name in ('desktop-smoke.json', 'desktop-smoke-error.json', 'desktop-smoke.png', 'browser-smoke.json'):
+                                  if name not in seen:
+                                      try:
+                                          if not (candidate['smoke'] / name).exists():
+                                              continue
+                                          seen.add(name)
+                                          owned_path(candidate['smoke'] / name, native_tmp, fresh_ns=launch_ns)
+                                          event('foreground_artifact_observed', artifact=name)
+                                      except (DiagnosticGuardError, OSError) as error:
+                                          seen.add(name)
+                                          reason = str(error) if isinstance(error, DiagnosticGuardError) else 'foreground_artifact_io_unavailable'
+                                          event('foreground_artifact_guard_rejected', artifact=name, reason=reason)
+                          if candidate and not fatal_guard and receipt['sampling_attempts'] == 0:
+                              try:
+                                  main_identity = verify_main(reader, candidate['pid'], finalizer.pid, executable.resolve(), os.getuid())
+                                  children = reader.children(candidate['pid'])
+                                  # Recheck after child collection, immediately before the sample command.
+                                  verify_main(reader, candidate['pid'], finalizer.pid, executable.resolve(), os.getuid(), main_identity)
+                                  receipt['processes_at_sample'] = process_receipt(main_identity, executable, children)
+                                  sample = Path('/usr/bin/sample')
+                                  if not sample.is_file() or not os.access(sample, os.X_OK):
+                                      raise DiagnosticGuardError('sample_tool_unavailable')
+                                  if finalizer.poll() is not None or deadline - time.monotonic() < 5:
+                                      raise DiagnosticGuardError('insufficient_original_deadline_or_finalizer_exited')
+                                  private_dir = tempfile.TemporaryDirectory(prefix='sample-private-', dir=native_tmp)
+                                  raw_report = Path(private_dir.name) / 'report.private'
+                                  sampler = subprocess.Popen([str(sample), str(candidate['pid']), '5', '10', '-mayDie', '-file', str(raw_report)],
+                                                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+                                  receipt['sampling_attempts'] = 1
+                                  receipt['sampling_status'] = 'running'
+                                  # Five seconds of collection plus bounded diagnostic cleanup grace.
+                                  # This never changes or extends the application's original deadline.
+                                  sampler_cleanup_deadline = min(deadline, time.monotonic() + 15)
+                                  event('owned_main_sample_started', main_pid=candidate['pid'], sampler_pid=sampler.pid)
+                              except (DiagnosticGuardError, OSError) as error:
+                                  reason = str(error) if isinstance(error, DiagnosticGuardError) else 'sample_start_failed'
+                                  receipt['sampling_status'] = reason
+                                  fatal_guard = True
+                                  event('sampling_guard_rejected', reason=reason)
+                          if sampler is not None and sampler.poll() is None and time.monotonic() >= sampler_cleanup_deadline:
+                              sampler.kill()
+                              sampler.wait()
+                              receipt['sampling_status'] = 'sample_did_not_finish_after_five_second_collection_and_cleanup_grace'
+                              event('owned_sampler_stopped_without_report')
+                              cleanup_private_report()
+                              sampler = None
+                          if sampler is not None and sampler.poll() is not None:
+                              code = sampler.returncode
+                              receipt['sampler_exit_code'] = code
+                              try:
+                                  verify_main(reader, candidate['pid'], finalizer.pid, executable.resolve(), os.getuid(), main_identity)
+                                  if code != 0:
+                                      raise DiagnosticGuardError('sample_failed_or_permission_denied')
+                                  owned_path(raw_report, Path(private_dir.name), fresh_ns=launch_ns)
+                                  if raw_report.stat().st_size > 16 * 1024 * 1024:
+                                      raise DiagnosticGuardError('sample_report_oversized')
+                                  cleaned = sanitize_sample(raw_report.read_text(encoding='utf-8', errors='replace'))
+                                  if not cleaned:
+                                      raise DiagnosticGuardError('sample_report_has_no_safe_stack_graph')
+                                  (evidence / 'native-main-sample-sanitized.txt').write_text(cleaned, encoding='utf-8')
+                                  receipt['sampling_status'] = 'captured_sanitized_stack_graph'
+                                  receipt['runtime_sampling_permission'] = 'sample_command_succeeded_for_this_owned_pid'
+                              except (DiagnosticGuardError, OSError) as error:
+                                  receipt['sampling_status'] = str(error) if isinstance(error, DiagnosticGuardError) else 'sample_report_io_unavailable'
+                              event('owned_main_sample_finished', status=receipt['sampling_status'], exit_code=code)
+                              cleanup_private_report()
+                              sampler = None
+                          time.sleep(min(0.5, max(0, deadline - time.monotonic())))
+                      receipt['finalizer_exit_code'] = finalizer.returncode
+                      receipt['application_result'] = 'success' if finalizer.returncode == 0 else 'nonzero_exit'
+                      event('finalizer_exited', exit_code=finalizer.returncode)
+                      if finalizer.returncode != 0:
+                          raise subprocess.CalledProcessError(finalizer.returncode, args)
+                  finally:
+                      if finalizer.poll() is None:
+                          finalizer.kill()
+                          finalizer.wait()
+                          event('owned_immediate_finalizer_stopped_after_wrapper_failure')
+                      if sampler is not None:
+                          if sampler.poll() is None:
+                              sampler.kill()
+                              sampler.wait()
+                          receipt['sampling_status'] = 'sample_incomplete_before_finalizer_exit_or_deadline'
+                          event('owned_sampler_stopped_without_report')
+                      cleanup_private_report()
+                      event('monitor_finished')
+              # Returning does not approve acceptance. All original downstream gates remain required.
+              return receipt
+
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
           evidence = root / 'evidence'
           stage = root / 'native-app'
@@ -267,7 +670,7 @@ jobs:
           env.update(HOME=str(owned_home), TMPDIR=str(native_tmp) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
                      WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(post_open))
           # The finalizer's concluding `open` also inherits this explicit smoke profile.
-          command('native-finalizer', ['bash', str(stage / 'Finalize PEACE ATLAS.command'), '--smoke'], env=env, timeout=1200)
+          run_native_finalizer_diagnostics(stage, evidence, native_tmp, env, timeout=1200)
           audits = list(native_tmp.glob('peace-atlas-sign.*'))
           if len(audits) != 1:
               raise SystemExit('Native finalizer audit directory is ambiguous')
