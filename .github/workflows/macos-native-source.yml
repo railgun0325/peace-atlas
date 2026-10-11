@@ -1,0 +1,379 @@
+name: Build and verify private macOS source
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character source commit SHA containing the foundation source manifest
+        required: true
+        type: string
+      release_tag:
+        description: Existing private draft release in this repository
+        required: true
+        default: v2.0.0-foundation-reuse.20261011
+        type: string
+
+# Write access is used only by the final candidate release-asset upload step.
+permissions:
+  contents: write
+
+concurrency:
+  group: peace-atlas-native-source-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-native-source:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      EXPECTED_REPOSITORY: railgun0325/peace-atlas
+      EXPECTED_MANIFEST_SHA256: ceb5f1a974a949ab74619122e83bca443fa153004572141f385df0cb44cf863b
+    steps:
+      - name: Fetch the exact same-repository source commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, re, subprocess, sys, tarfile
+
+          def valid_inputs(repository, expected_repository, source_sha, tag):
+              if repository != expected_repository:
+                  raise ValueError('Only the explicitly authorized repository is supported')
+              if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
+                  raise ValueError('source_sha must be a full lowercase commit SHA')
+              if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
+                  raise ValueError('Invalid release tag')
+              return source_sha, tag
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
+                                         os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
+          if platform.system() != 'Darwin' or platform.machine() != 'arm64':
+              raise SystemExit('Native Apple Silicon runner required')
+          if sys.version_info < (3, 12):
+              raise SystemExit('Runner Python 3.12 or later is required for safe tar extraction')
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
+          root.mkdir(exist_ok=False)
+          evidence = root / 'evidence'
+          evidence.mkdir()
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
+          repository = api('repos/' + repo)
+          if repository.get('private') is not True:
+              raise SystemExit('A private repository is required')
+          release = api('repos/' + repo + '/releases/tags/' + tag)
+          if release.get('draft') is not True or release.get('tag_name') != tag:
+              raise SystemExit('The selected existing release must remain a draft')
+          commit = api('repos/' + repo + '/commits/' + source_sha)
+          if commit.get('sha') != source_sha:
+              raise SystemExit('GitHub did not resolve the exact requested source commit')
+          archive = root / 'source.tar.gz'
+          with archive.open('xb') as stream:
+              subprocess.run(['gh', 'api', '--hostname', 'github.com',
+                              'repos/' + repo + '/tarball/' + source_sha], stdout=stream, check=True, timeout=600)
+          with tarfile.open(archive, 'r:gz') as source:
+              names = source.getmembers()
+              tops = {pathlib.PurePosixPath(item.name).parts[0] for item in names}
+              if len(tops) != 1:
+                  raise SystemExit('Source archive must have one repository root')
+              for item in names:
+                  path = pathlib.PurePosixPath(item.name)
+                  if path.is_absolute() or '..' in path.parts or not (item.isfile() or item.isdir() or item.issym() or item.islnk()):
+                      raise SystemExit('Unsafe source archive member')
+              source.extractall(root / 'source', filter='data')
+          checkout = root / 'source' / tops.pop()
+          manifest_path = checkout / 'docs/release-evidence/foundation-source-manifest-20261011.json'
+          manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
+          if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('The committed foundation source manifest differs from the prepared release freeze')
+          manifest = json.loads(manifest_path.read_text())
+          if manifest.get('freeze_format_version') != 2 or manifest['targets'].get('macos-arm64') != 3142:
+              raise SystemExit('Unexpected foundation target manifest')
+          for name, record in manifest['files'].items():
+              relative = pathlib.PurePosixPath(record['source'])
+              if relative.is_absolute() or '..' in relative.parts:
+                  raise SystemExit('Manifest source escaped the checkout')
+              path = checkout.joinpath(*relative.parts).resolve(strict=True)
+              if not path.is_relative_to(checkout.resolve()) or not path.is_file():
+                  raise SystemExit('Manifest source is not a checked-out file')
+              if hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() != record['sha256']:
+                  raise SystemExit('Committed application source differs: ' + name)
+          if hashlib.file_digest((checkout / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
+              raise SystemExit('Committed builder differs from the source freeze')
+          receipt = {'repository': repo, 'source_sha': source_sha, 'source_tree_sha': commit['commit']['tree']['sha'],
+                     'source_archive_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(),
+                     'source_manifest_sha256': manifest_sha, 'application_union_count': len(manifest['files']),
+                     'mac_application_count': manifest['targets']['macos-arm64'], 'release_tag': tag,
+                     'draft_release_id': release['id'], 'platform': platform.platform(), 'architecture': platform.machine()}
+          (evidence / 'source-receipt.json').write_text(json.dumps(receipt, indent=2))
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('SOURCE_DIR=' + str(checkout) + '\n')
+          print('Exact source commit and all frozen application sources verified')
+          PY
+
+      - name: Build and verify the frozen Mac application target
+        run: |
+          python3 - <<'PY'
+          import hashlib, importlib.util, json, os, pathlib, subprocess, zipfile
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
+          source = pathlib.Path(os.environ['SOURCE_DIR'])
+          evidence = root / 'evidence'
+          venv = root / 'build-venv'
+          subprocess.run(['python3', '-m', 'venv', str(venv)], check=True, timeout=120)
+          python = venv / 'bin/python'
+          with (evidence / 'build.log').open('w') as log:
+              subprocess.run([str(python), '-I', '-B', str(source / 'desktop/build.py'),
+                              '--target', 'macos-arm64', '--mac-signing', 'native-finalizer'],
+                             cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+          manifest = json.loads((source / 'docs/release-evidence/foundation-source-manifest-20261011.json').read_text())
+          target = manifest['target_files']['macos-arm64']
+          expected = {name: manifest['files'][name]['sha256'] for name in target}
+          spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
+          builder = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(builder)
+          actual_sources = builder.application_files('macos-arm64')
+          actual = {name: hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() for path, name in actual_sources}
+          if len(actual_sources) != len(actual) or actual != expected or len(actual) != 3142:
+              raise SystemExit('Mac target membership or application source hashes differ from the committed freeze')
+          results = json.loads((source / 'dist/desktop-build-results-foundation-reuse-20261011.json').read_text())
+          if len(results) != 1 or results[0]['target'] != 'macos-arm64':
+              raise SystemExit('Only the requested Mac target may be produced')
+          result = results[0]
+          archive = pathlib.Path(result['archive']).resolve(strict=True)
+          if not archive.is_relative_to((source / 'dist').resolve()):
+              raise SystemExit('Build output escaped dist')
+          raw_sha = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
+          if raw_sha != result['sha256']:
+              raise SystemExit('Built archive differs from the builder result')
+          prefix = 'PEACE ATLAS.app/Contents/Resources/'
+          with zipfile.ZipFile(archive) as bundle:
+              names = bundle.namelist()
+              if len(names) != len(set(names)) or bundle.testzip() is not None:
+                  raise SystemExit('Built ZIP has duplicate or corrupt entries')
+              for name in names:
+                  path = pathlib.PurePosixPath(name)
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit('Unsafe build archive path')
+              packaged = json.loads(bundle.read(prefix + 'build-manifest.json'))
+              packaged_hashes = {row['path']: row['sha256'] for row in packaged['application_files']}
+              if len(packaged_hashes) != len(packaged['application_files']) or packaged_hashes != expected:
+                  raise SystemExit('Packaged application manifest differs from the committed freeze')
+              for name, sha in expected.items():
+                  if hashlib.sha256(bundle.read(prefix + name)).hexdigest() != sha:
+                      raise SystemExit('Packaged application bytes differ: ' + name)
+          (evidence / 'build-result.json').write_text(json.dumps(result, indent=2))
+          (evidence / 'raw-archive-sha256.txt').write_text(raw_sha + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('RAW_ARCHIVE=' + str(archive) + '\n')
+          print('New runner-built ZIP and all 3142 Mac application files verified before native signing')
+          PY
+
+      - name: Finalize and verify native isolated paths
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, re, shutil, sqlite3, subprocess, time
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
+          evidence = root / 'evidence'
+          stage = root / 'native-app'
+          subprocess.run(['ditto', '-x', '-k', os.environ['RAW_ARCHIVE'], str(stage)], check=True, timeout=180)
+          app = stage / 'PEACE ATLAS.app'
+          resources = app / 'Contents/Resources'
+          executable = app / 'Contents/MacOS/Electron'
+          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/foundation-source-manifest-20261011.json').read_text())
+          expected = {name: manifest['files'][name]['sha256'] for name in manifest['target_files']['macos-arm64']}
+          macho_magic = {b'\xfe\xed\xfa\xce', b'\xce\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
+                         b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'}
+          signable = set()
+          for name, sha in expected.items():
+              path = resources / name
+              if hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() != sha:
+                  raise SystemExit('Extracted application differs before signing: ' + name)
+              with path.open('rb') as stream:
+                  if stream.read(4) in macho_magic:
+                      signable.add(name)
+          def command(name, args, *, env=None, timeout=180):
+              with (evidence / (name + '.log')).open('w') as log:
+                  subprocess.run(args, check=True, stdout=log, stderr=subprocess.STDOUT, env=env, timeout=timeout)
+          # A raw staging package is expected to require finalization. This result is diagnostic only.
+          with (evidence / 'raw-signature-diagnostic.log').open('w') as log:
+              raw_signature = subprocess.run(['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)],
+                                             stdout=log, stderr=subprocess.STDOUT, timeout=180).returncode
+          owned_home = evidence / 'owned-home'
+          native_tmp = evidence / 'native-tmp'
+          post_open = evidence / 'finalizer-post-open-profile'
+          for path in (owned_home, native_tmp, post_open):
+              path.mkdir()
+          env = {name: os.environ[name] for name in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if name in os.environ}
+          env.update(HOME=str(owned_home), TMPDIR=str(native_tmp) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
+                     WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(post_open))
+          # The unchanged finalizer's concluding `open` also inherits this explicit smoke profile.
+          command('native-finalizer', ['bash', str(stage / 'Finalize PEACE ATLAS.command'), '--smoke'], env=env, timeout=1200)
+          audits = list(native_tmp.glob('peace-atlas-sign.*'))
+          if len(audits) != 1:
+              raise SystemExit('Native finalizer audit directory is ambiguous')
+          shutil.copy2(audits[0] / 'codesign.log', evidence / 'finalizer-codesign.log')
+          for name in ('desktop-smoke.json', 'desktop-smoke.png', 'browser-smoke.json'):
+              shutil.copy2(audits[0] / 'smoke' / name, evidence / ('finalizer-' + name))
+          finalizer_desktop = json.loads((evidence / 'finalizer-desktop-smoke.json').read_text())
+          finalizer_browser = json.loads((evidence / 'finalizer-browser-smoke.json').read_text())
+          if finalizer_desktop.get('health', {}).get('ok') is not True or finalizer_browser.get('ok') is not True:
+              raise SystemExit('Finalizer desktop/backend/browser smoke failed')
+          deadline = time.monotonic() + 120
+          while time.monotonic() < deadline:
+              commands = subprocess.check_output(['ps', '-ax', '-o', 'command='], text=True)
+              active = any(line.strip() == str(executable) or line.strip().startswith(str(executable) + ' ') for line in commands.splitlines())
+              if (post_open / 'desktop-smoke.json').exists() and not active:
+                  break
+              time.sleep(1)
+          else:
+              raise SystemExit('Finalizer concluding native open did not finish in its isolated smoke profile')
+          if json.loads((post_open / 'desktop-smoke.json').read_text()).get('health', {}).get('ok') is not True:
+              raise SystemExit('Finalizer concluding isolated open failed')
+          command('codesign-after-finalization', ['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)])
+          profile = evidence / 'isolated-profile'
+          profile.mkdir()
+          launch_env = dict(env, WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SMOKE_BACKUP='1')
+          command('native-launch', [str(executable)], env=launch_env, timeout=300)
+          desktop = json.loads((profile / 'desktop-smoke.json').read_text())
+          if desktop.get('health', {}).get('ok') is not True or not (profile / 'desktop-smoke.png').stat().st_size:
+              raise SystemExit('Independent native desktop/backend smoke failed')
+          backup = desktop.get('checks', {}).get('backup', {})
+          backup_path = pathlib.Path(backup['file']).resolve(strict=True)
+          if not backup_path.is_relative_to(profile.resolve()) or backup.get('source_draft_unchanged') is not True:
+              raise SystemExit('Backup smoke did not remain isolated')
+          with sqlite3.connect(backup_path.as_uri() + '?mode=ro', uri=True) as database:
+              if database.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                  raise SystemExit('Native downloaded backup failed SQLite integrity')
+              columns = {row[1] for row in database.execute('PRAGMA table_info(wb_drafts)')}
+              if not columns or not any(backup['draft_keyword'] in str(row) for row in database.execute('SELECT * FROM wb_drafts')):
+                  raise SystemExit('Native downloaded backup omitted the committed synthetic draft')
+          command('bundled-browser', [str(resources / 'python/bin/python3'), '-I', '-B',
+                  str(resources / 'backend/browser_smoke.py'), '--browsers-path', str(resources / 'browsers'),
+                  '--output', str(evidence / 'browser-smoke.json')], env=env, timeout=180)
+          browser = json.loads((evidence / 'browser-smoke.json').read_text())
+          if browser.get('ok') is not True or {row['mode'] for row in browser['checks']} != {'headless', 'visible'}:
+              raise SystemExit('Bundled browser acceptance requires both offline modes')
+          changed = []
+          for name, sha in expected.items():
+              actual = hashlib.file_digest((resources / name).open('rb'), 'sha256').hexdigest()
+              if actual != sha:
+                  if name not in signable:
+                      raise SystemExit('Native finalization changed frozen non-Mach-O application bytes: ' + name)
+                  changed.append(name)
+          command('codesign-after-all-smokes', ['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)])
+          finalized = list(stage.glob('*-adhoc.zip'))
+          if len(finalized) != 1:
+              raise SystemExit('Native finalized archive is ambiguous')
+          roundtrip = root / 'signed-archive-roundtrip'
+          subprocess.run(['ditto', '-x', '-k', str(finalized[0]), str(roundtrip)], check=True, timeout=180)
+          command('codesign-finalized-zip-roundtrip', ['codesign', '--verify', '--deep', '--strict', '--verbose=2',
+                  str(roundtrip / 'PEACE ATLAS.app')])
+          def app_inventory(base):
+              return {path.relative_to(base).as_posix(): ('link', os.readlink(path)) if path.is_symlink() else
+                      ('file', hashlib.file_digest(path.open('rb'), 'sha256').hexdigest())
+                      for path in base.rglob('*') if path.is_symlink() or path.is_file()}
+          if app_inventory(app) != app_inventory(roundtrip / 'PEACE ATLAS.app'):
+              raise SystemExit('Finalized ZIP bytes differ from the natively tested signed application')
+          native_sha = hashlib.file_digest(finalized[0].open('rb'), 'sha256').hexdigest()
+          raw_sha = (evidence / 'raw-archive-sha256.txt').read_text().strip()
+          prior_cross_built_sha = '20e40a1a55321448dba1ff816706cb3da21473ade7070a6b12181dd4a6b550d5'
+          if native_sha in (raw_sha, prior_cross_built_sha):
+              raise SystemExit('Native derived archive must not be represented as either raw ZIP')
+          assets = root / 'release-assets'
+          assets.mkdir()
+          name = ('PEACE-ATLAS-2.0.0-macos-arm64-foundation-reuse-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+                  + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
+          output = assets / name
+          shutil.copy2(finalized[0], output)
+          (assets / (name + '.sha256')).write_text(native_sha + '  ' + name + '\n')
+          source_receipt = json.loads((evidence / 'source-receipt.json').read_text())
+          acceptance = {**source_receipt, 'ok': True, 'native_finalized_archive': name, 'native_finalized_archive_sha256': native_sha,
+                        'runner_built_raw_archive_sha256': raw_sha, 'prior_windows_cross_built_sha256_reference': prior_cross_built_sha,
+                        'same_archive_as_prior_cross_build': False, 'raw_signature_verified': raw_signature == 0,
+                        'native_codesign': True, 'finalizer_smoke': True, 'finalizer_post_open_isolated': True,
+                        'finalized_zip_roundtrip_codesign_and_bytes': True,
+                        'native_desktop_backend': True, 'native_backup_sqlite_integrity': True, 'bundled_browser': browser,
+                        'application_macho_hashes_changed_by_signing': changed,
+                        'frozen_non_macho_application_unchanged': True, 'real_model_calls': 0, 'formal_user_data_accessed': False,
+                        'notarization': 'not performed', 'quarantine_or_gatekeeper_changes': False,
+                        'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']}
+          (evidence / 'acceptance.json').write_text(json.dumps(acceptance, indent=2))
+          (assets / (name + '.acceptance.json')).write_text(json.dumps(acceptance, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Native ARM64 source build and acceptance passed for commit `' + os.environ['SOURCE_SHA'] + '`.\n\n')
+              summary.write('Derived ad-hoc ZIP SHA-256: `' + native_sha + '`. This is a newly built and natively finalized archive, not the Windows cross-built ZIP. No notarization, real-model call or formal user data was used.\n')
+          PY
+
+      - name: Upload accepted native candidate to the existing private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
+          repo, tag = os.environ['GITHUB_REPOSITORY'], os.environ['RELEASE_TAG']
+          if repo != os.environ['EXPECTED_REPOSITORY'] or not re.fullmatch(r'[a-f0-9]{40}', os.environ['SOURCE_SHA']):
+              raise SystemExit('Repository or source input changed')
+          if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
+              raise SystemExit('Invalid release tag')
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
+          accepted = json.loads((root / 'evidence/acceptance.json').read_text())
+          if accepted.get('ok') is not True or accepted['source_sha'] != os.environ['SOURCE_SHA'] or accepted['release_tag'] != tag:
+              raise SystemExit('Complete acceptance is required before upload')
+          release = api('repos/' + repo + '/releases/tags/' + tag)
+          if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id']:
+              raise SystemExit('The same private draft must still exist')
+          assets = sorted((root / 'release-assets').iterdir())
+          if len(assets) != 3 or {path.name for path in assets} != {accepted['native_finalized_archive'],
+                  accepted['native_finalized_archive'] + '.sha256', accepted['native_finalized_archive'] + '.acceptance.json'}:
+              raise SystemExit('Unexpected upload asset set')
+          archive = root / 'release-assets' / accepted['native_finalized_archive']
+          if hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_finalized_archive_sha256']:
+              raise SystemExit('Accepted native archive changed before upload')
+          # No --clobber: a retry cannot replace a prior candidate or the Windows-built archive.
+          subprocess.run(['gh', 'release', 'upload', tag, *map(str, assets), '--repo', repo], check=True, timeout=900)
+          after = api('repos/' + repo + '/releases/tags/' + tag)
+          uploaded = {asset['name']: asset for asset in after['assets']}
+          for path in assets:
+              asset = uploaded.get(path.name)
+              digest = 'sha256:' + hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
+              if not asset or asset.get('size') != path.stat().st_size or asset.get('state') != 'uploaded':
+                  raise SystemExit('Uploaded release asset is incomplete')
+              if asset.get('digest') and asset['digest'] != digest:
+                  raise SystemExit('GitHub asset digest differs from the accepted file')
+          if after.get('draft') is not True or after['id'] != accepted['draft_release_id']:
+              raise SystemExit('Release draft changed during upload')
+          (root / 'evidence/upload-receipt.json').write_text(json.dumps({'ok': True, 'repository': repo,
+              'release_tag': tag, 'release_id': after['id'], 'draft': True, 'asset_names': [path.name for path in assets],
+              'native_finalized_archive_sha256': accepted['native_finalized_archive_sha256']}, indent=2))
+          print('Accepted native candidate assets uploaded to the same private draft')
+          PY
+
+      - name: Preserve native acceptance evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-native-source-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/*.json
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/*.txt
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/*.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/*.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/codesign.log
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/*.json
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/*.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/desktop-smoke*.json
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/desktop-smoke*.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.json
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-backup-controls.png
+            ${{ runner.temp }}/peace-atlas-native-source/release-assets/*
