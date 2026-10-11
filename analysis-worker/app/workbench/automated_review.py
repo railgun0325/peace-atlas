@@ -21,7 +21,8 @@ SYSTEM = '''你是 PEACE ATLAS 的公开证据审核员。你的任务是审核�
 先 list_evidence；用 read_evidence 阅读原文；独立公开来源可通过 inspect_account 搜索，再 read_evidence 读取。
 任何肯定结论都必须 check_citation 核对逐字摘录；搜索摘要不能作确认依据。
 账号类型、身份核验、组织隶属、内容准确性是不同事项。仅名称、自称、蓝标、关注、共同关注和内容提及不能证明官方账号或组织隶属。
-组织/个人类型需要独立网页具体主体说明和准确账号主页回链；不能明确区分时 type=unknown，并解释缺口。
+组织/个人类型是发布主体形式分类，不能与官方身份核验混同。先读该账号保存的公开主页简介；简介明确描述组织、集体发布主体或个人生活/经历时，可以仅据已逐字核对的自身简介分类，并说明“公开主页自述，未独立核验”。不能凭名称、口号、关注、政治观点或提及团体判类型；简介含糊时 unknown。
+独立网页主体说明及站点自有准确主页回链仍可支持更强类型依据；它不授权用同页其他账号替代目标。类型分类不授予 verified，不确认实名、组织成员资格或政治身份。
 原有人工或官方登记的目标出处可使用该目标的正文主页回链；这不授权同页其他账号，也不把自动发现来源升级为人工登记。
 开启公开网络时，每个最终为 unknown 的账号都必须至少调用一次 inspect_account；不能跳过账号调查。
 inspect_account 的登记出处优先读取，搜索只用于定位；离题结果会被过滤，检索不可用时必须说明具体访问或检索限制。
@@ -30,7 +31,8 @@ inspect_account 的登记出处优先读取，搜索只用于定位；离题结�
 关系确认须支持原记录 object_label、relationship 及 identity_qualifiers 的全部地区、领导者、职务或刊物限定；只支持一部分时记 inconclusive，不能删除原限定来确认。
 组织官网指认的信息发布账号只支持该发布归属，note须说明确认范围；不扩大为个人成员身份、组织控制、其他组织关系或原候选理由全部背景已核实。
 活动日期不是发布日期，地名提及不是举办地；没有实际日期、仅泛泛讨论、计划与举行不清楚不能计为确认活动。
-确认活动的已核对摘录必须具体包含完整年份、月日和活动描述；不能从发布日期补年份。举办地不能从作者所属地补出。
+确认活动须有已核对的实际举行或正在参加描述。完整年月日可直接使用；明确的本日/今日/昨日或今年+同一活动月日可提交日期建议，宿主只依据可信原帖DOM发布时间转为日本时区并记录解析依据；裸月日不得补年。县简称仅在明确举办地语境中可规范，不能从作者所属地或组织名补出。
+所有支持日期、举办地和举行状态的原句须 check_citation；预告、号召、未来时段或泛泛运动描述记 inconclusive，不能计入已举行活动。核对了来源描述仍只表示 source_claim_only，不宣称活动经过独立核实。
 多日期/多地点描述不能随便选一个。反例记 rejected；证据不足记 inconclusive，解释缺失内容。
 保留原记录编号和 expected_sha256，不能新增账号/关系/活动，也不能清理原文。
 结束只返回 JSON：{"decisions":[...]}，本批每项必须且只能出现一次。
@@ -199,6 +201,48 @@ class ReviewGateway:
         return result
 
 
+def _checked_own_profile_proofs(expected, proofs, gateway, trace):
+    """Classify a source's stated publishing form without granting identity trust."""
+    from .account_verification import account_link_key
+    record = expected['record']
+    profile = (record.get('metadata') or {}).get('last_public_profile')
+    if not isinstance(profile, dict) or not isinstance(profile.get('bio'), str) or not profile['bio'].strip():
+        return []
+    actor = f"{record['platform']}:{record['handle'].lstrip('@').lower()}"
+    urls = (record.get('url'), profile.get('url'))
+    if any(not isinstance(url, str) or not url.startswith('https://') or account_link_key(url) != actor for url in urls):
+        return []
+    citation = f"accounts:{expected['id']}"
+    text = gateway._record_text(expected)
+    capture = digest(text)
+    windows, checked = [], set()
+    for call in trace:
+        result, args = call.get('result'), call.get('args')
+        if call.get('ok') is not True or not isinstance(result, dict) or not isinstance(args, dict):
+            continue
+        if (call.get('name') == 'check_citation' and result.get('valid') is True
+                and args.get('citation_id') == result.get('citation_id') == citation
+                and isinstance(args.get('exact_quote'), str) and args['exact_quote'] == result.get('quote')):
+            checked.add((citation, args['exact_quote']))
+        if call.get('name') != 'read_evidence':
+            continue
+        offset, limit = args.get('offset', 0), args.get('limit', 12000)
+        window = result.get('text')
+        if (args.get('citation_id') == citation and result.get('citation_id') == citation
+                and result.get('source_capture_sha256') == capture and account_link_key(result.get('url')) == actor
+                and type(offset) is int and 0 <= offset <= len(text) and result.get('offset') == offset
+                and type(result.get('offset')) is int and type(limit) is int and 1 <= limit <= 12000 and isinstance(window, str)
+                and result.get('total_characters') == len(text) and type(result.get('total_characters')) is int
+                and window == text[offset:offset + limit]):
+            windows.append(window)
+    return [proof for proof in proofs if proof.get('independent') is False
+            and proof.get('citation_id') == citation and proof.get('source_capture_sha256') == capture
+            and account_link_key(proof.get('url')) == actor and isinstance(proof.get('quote'), str)
+            and proof['quote'].strip() and proof['quote'] in profile['bio']
+            and (citation, proof['quote']) in checked
+            and any(proof['quote'] in window for window in windows)]
+
+
 def validate_decisions(value, gateway, trace):
     if not isinstance(value, dict) or set(value) != {'decisions'} or not isinstance(value['decisions'], list):
         raise pipeline.PipelineError('自动审核 JSON 需要 decisions 数组。')
@@ -216,7 +260,7 @@ def validate_decisions(value, gateway, trace):
             result = call['result']
             checks[(result['citation_id'], result['quote'])] = result
     for row in value['decisions']:
-        if not isinstance(row, dict) or set(row) - {'kind', 'id', 'outcome', 'note', 'evidence', 'date', 'prefecture', 'title', 'resolved_evidence'}:
+        if not isinstance(row, dict) or set(row) - {'kind', 'id', 'outcome', 'note', 'evidence', 'date', 'prefecture', 'title', 'resolved_evidence', 'type_evidence_basis', 'activity_review_basis'}:
             raise pipeline.PipelineError('自动审核决定字段无效。')
         key = (row.get('kind'), row.get('id'))
         if any(not isinstance(field, str) for field in key) or key not in expected or key in actual:
@@ -249,9 +293,14 @@ def validate_decisions(value, gateway, trace):
         if key[0] == 'accounts' and positive:
             account = expected[key]['record']
             actor = f"{account['platform']}:{account['handle'].lstrip('@').lower()}"
-            if not any(proof['independent'] and (actor in proof['owner_account_keys']
-                       or actor in proof.get('registered_account_keys', [])) for proof in resolved):
+            independent = any(proof['independent'] and (actor in proof['owner_account_keys']
+                              or actor in proof.get('registered_account_keys', [])) for proof in resolved)
+            own_profile = _checked_own_profile_proofs(expected[key], resolved, gateway, trace)
+            if not independent and not own_profile:
                 raise pipeline.PipelineError('账号类型缺少独立主体说明与站点自有准确主页回链。')
+            row['type_evidence_basis'] = 'independent_source' if independent else 'public_profile_description'
+        elif key[0] == 'accounts':
+            row.pop('type_evidence_basis', None)
         if key[0] == 'claims' and positive and not any(proof['independent'] for proof in resolved):
             raise pipeline.PipelineError('关系确认缺少独立公开来源；自述应记证据不足。')
         if key[0] == 'claims' and positive:
@@ -264,21 +313,19 @@ def validate_decisions(value, gateway, trace):
                 raise pipeline.PipelineError(_CLAIM_QUALIFIER_GAP)
         if key[0] == 'activities' and row['outcome'] == 'confirmed':
             from .store import _iso_date
-            from .activity_events import ACTIVITY, PREFECTURES
             try:
                 _iso_date(row.get('date'), '实际活动日期')
             except ValueError:
                 raise pipeline.PipelineError('自动活动日期无效。') from None
             if not row.get('date'):
                 raise pipeline.PipelineError('自动确认活动缺少实际活动日期。')
-            text = unicodedata.normalize('NFKC', '\n'.join(proof['quote'] for proof in resolved))
-            year, month, day = map(int, row['date'].split('-'))
-            date_pattern = rf'(?:{year}[年/.-]\s*0?{month}[月/.-]\s*0?{day}(?:日|\b)|0?{month}月\s*0?{day}日)'
-            if str(year) not in text or not re.search(date_pattern, text) or not ACTIVITY.search(text):
-                raise pipeline.PipelineError('实际活动年份、月日和活动描述必须出现在已核对摘录中；不能由发布日期补齐。')
-            pref = row.get('prefecture') or ''
-            if pref and (pref not in PREFECTURES or pref not in text):
-                raise pipeline.PipelineError('确认的都道府县必须在实际举办描述的已核对摘录中；不明确时留空。')
+            from .activity_review_support import build_activity_review_basis, ActivitySupportError
+            try:
+                row['activity_review_basis'] = build_activity_review_basis(expected[key], resolved, row)
+            except ActivitySupportError as error:
+                raise pipeline.PipelineError(str(error)) from None
+        elif key[0] == 'activities':
+            row.pop('activity_review_basis', None)
         row['resolved_evidence'] = copy.deepcopy(resolved)
     if set(actual) != set(expected):
         raise pipeline.PipelineError('自动审核必须处理本批全部指定记录。')
@@ -293,6 +340,7 @@ _ACTIVITY_EVIDENCE_GAPS = {
     '自动确认活动缺少实际活动日期。',
     '实际活动年份、月日和活动描述必须出现在已核对摘录中；不能由发布日期补齐。',
     '确认的都道府县必须在实际举办描述的已核对摘录中；不明确时留空。',
+    '实际活动举行状态缺少已核对支持；预告、号召或泛泛描述不能计入已举行活动。',
 }
 _CLAIM_QUALIFIER_GAP = '原关系身份限定缺少独立摘录支持；不能仅凭基本组织名确认整条。'
 
@@ -347,9 +395,13 @@ def _batch(rows, decisions):
         independent = [proof for proof in evidence if proof['independent']]
         note = 'DeepSeek 自动审核：' + decision['note']
         if kind == 'accounts':
+            profile_basis = decision.get('type_evidence_basis') == 'public_profile_description'
+            type_evidence = evidence if profile_basis else independent
             account = {'id': identity, 'expected_sha256': row['expected_sha256'],
-                'identity': {'type': decision['outcome'], 'manual_locked': False, 'note': note[:1000], 'evidence_urls': list(dict.fromkeys(proof['url'] for proof in independent))[:5]}}
-            if decision['outcome'] != 'unknown':
+                'identity': {'type': decision['outcome'], 'manual_locked': False, 'note': note[:1000],
+                    'evidence_basis': decision.get('type_evidence_basis', 'agent_review'),
+                    'evidence_urls': [record['url']] if profile_basis else list(dict.fromkeys(proof['url'] for proof in type_evidence))[:5]}}
+            if decision['outcome'] != 'unknown' and not profile_basis:
                 actor = f"{record['platform']}:{record['handle'].lstrip('@').lower()}"
                 existing = (record.get('metadata') or {}).get('verification_sources') or []
                 sources = [{key: source.get(key, '') for key in ('url', 'label', 'account_type')} for source in existing if isinstance(source, dict) and source.get('url')]
@@ -362,11 +414,13 @@ def _batch(rows, decisions):
             result[kind].append({'id': identity, 'expected_sha256': row['expected_sha256'], 'run_id': record['run_id'], 'status': decision['outcome'], 'note': note,
                 'evidence_url': (independent or evidence or [{'url': ''}])[0]['url']})
         else:
+            if decision.get('activity_review_basis'):
+                note += ' 本项仅核对保存来源对活动举行的描述，未独立核实活动事实；日期和举办地解析依据随记录保存。'
             result[kind].append({'id': identity, 'expected_sha256': row['expected_sha256'], 'item_id': record['item_id'], 'status': decision['outcome'],
                 'title': (decision.get('title') or record['title'])[:260],
                 'date': (decision.get('date') or '') if decision['outcome'] == 'confirmed' else '',
                 'prefecture': (decision.get('prefecture') or '') if decision['outcome'] == 'confirmed' else '',
-                'quote': record['quote'], 'note': note})
+                'quote': record['quote'], 'note': note, 'review_basis': decision.get('activity_review_basis')})
     return BatchArgs.model_validate(result).model_dump()
 
 

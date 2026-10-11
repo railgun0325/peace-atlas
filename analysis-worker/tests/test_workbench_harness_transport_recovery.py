@@ -233,7 +233,8 @@ def test_cancel_during_recovery_does_not_start_another_attempt(monkeypatch):
     transport(monkeypatch, handler)
     with pytest.raises(asyncio.CancelledError):
         request_model(payload(gateway), gateway, _transport_event=checkpoint)
-    assert len(requests) == 1 and [event[0] for event in events] == ["attempt", "failure"]
+    assert len(requests) == 1 and [event[0] for event in events] == ["output_budget", "attempt", "failure"]
+    assert runtime._safe_output_budget(events[0][1]) == events[0][1]
 
 
 @pytest.mark.parametrize("error_type", [OSError, httpx.ReadError, httpx.ReadTimeout, asyncio.TimeoutError])

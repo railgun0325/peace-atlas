@@ -498,7 +498,7 @@ def test_candidate_binding_duplicates_and_post_accept_change_are_rejected(monkey
     assert SYNTHETIC_KEY not in json.dumps(checkpoints)
 
 
-@pytest.mark.parametrize('count',[True,-1,3,'1'])
+@pytest.mark.parametrize('count',[True,-1,7,'1'])
 def test_invalid_cumulative_final_repair_counter_is_rejected_before_launch(monkeypatch,tmp_path,count):
     _,processes=fake_sidecar(monkeypatch,tmp_path)
     saved=run_host([])

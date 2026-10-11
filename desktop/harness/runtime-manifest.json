@@ -28509,8 +28509,8 @@
     },
     {
       "path": "sidecar.mjs",
-      "sha256": "d71138674f8bfadc412c403d25b12f9cf79622490e6dfdbdbe8d214542851b6c",
-      "size": 11183,
+      "sha256": "7a0bbd8c73a53d2b9fbafb29451d36bd362453ce183c3ead570d9dc898a13de5",
+      "size": 12134,
       "targets": [
         "windows-x64",
         "macos-arm64"
@@ -28526,7 +28526,7 @@
       ]
     }
   ],
-  "closure_sha256": "805cbc76139e9040eaf0dbb7c3ba4b36ff270efd59850de529859269bcf33a35",
+  "closure_sha256": "cdcd68b8c3b1ea8cc71393c0802d817b42c7842627d5d74c2afc4c6a879c1b19",
   "excluded_npm_test_files": [
     "node_modules/fast-uri/test/ajv.test.js",
     "node_modules/fast-uri/test/component-safe-serialization.test.js",

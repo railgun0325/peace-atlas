@@ -12,7 +12,7 @@ def describe_identity(account):
     raw = (account.get('metadata') or {}).get('account_identity') or {}
     if (not isinstance(raw, dict) or not isinstance(raw.get('type'), str) or raw['type'] not in TYPES
             or type(raw.get('version')) is not int or raw['version'] != 1 or not isinstance(raw.get('basis'), str)
-            or raw['basis'] not in {'manual_review', 'registered_source_backlink', 'evidence_review'}):
+            or raw['basis'] not in {'manual_review', 'registered_source_backlink', 'evidence_review', 'public_profile_statement'}):
         raw = {}
     if not raw:
         # Additive projection for earlier, accepted curated-anchor checks. It
@@ -40,6 +40,7 @@ def describe_identity(account):
     identity = raw.get('type', 'unknown')
     fallback_scope = '尚无可核对的账号类型依据；名称、自称、蓝标和关注关系不能决定类型。'
     details = {'basis': raw.get('basis', 'insufficient_source'),
+               'classification_basis': 'public_profile_description' if raw.get('basis') == 'public_profile_statement' else 'agent_review',
                'confidence_scope': raw.get('confidence_scope') if isinstance(raw.get('confidence_scope'), str) else fallback_scope,
                'evidence_urls': [url for url in raw.get('evidence_urls', []) if isinstance(url, str)] if isinstance(raw.get('evidence_urls'), list) else [],
                'manual_locked': raw.get('manual_locked') is True,
@@ -67,10 +68,12 @@ def research_registry_context(accounts):
         descriptor = describe_identity(account)
         details = descriptor['account_type_details']
         metadata = {}
-        if details['basis'] in {'manual_review', 'registered_source_backlink', 'curated_registry_backlink', 'evidence_review'}:
+        if details['basis'] in {'manual_review', 'registered_source_backlink', 'curated_registry_backlink', 'evidence_review', 'public_profile_statement'}:
             metadata['account_identity'] = {'version': 1, 'type': descriptor['account_type'],
                 'basis': 'registered_source_backlink' if details['basis'] == 'curated_registry_backlink' else details['basis'],
                 **{field: details[field] for field in ('confidence_scope', 'evidence_urls', 'manual_locked', 'reviewed_at', 'note')}}
+            if details['basis'] == 'public_profile_statement':
+                metadata['account_identity']['classification_basis'] = 'public_profile_description'
         relevance = describe_relevance(account)['research_relevance']
         if relevance['basis'] == 'manual_review':
             raw = account['metadata']['research_relevance_override']
@@ -89,25 +92,46 @@ def _locked_account(store, connection, account_id):
     return value
 
 
-def correct_identity(store, account_id, *, type, manual_locked=True, note='', evidence_urls=(), _connection=None, _schedule=True, _reviewer='human'):
+def type_evidence_urls(account, urls, basis='agent_review'):
+    """Type evidence may cite its own profile; verification anchors remain independent."""
+    from .account_verification import _independent_source_url, account_link_key
+    if not isinstance(basis, str) or basis not in {'agent_review', 'independent_source', 'public_profile_description'}:
+        raise ValueError('账号类型依据类别无效。')
+    if basis != 'public_profile_description':
+        return list(dict.fromkeys(_independent_source_url(url) for url in urls))
+    actor = f"{account['platform']}:{account['handle'].lstrip('@').lower()}"
+    profile = (account.get('metadata') or {}).get('last_public_profile') or {}
+    if (not isinstance(profile, dict) or not isinstance(profile.get('bio'), str) or not profile['bio'].strip()
+            or account_link_key(account.get('url')) != actor or account_link_key(profile.get('url')) != actor
+            or not urls or any(account_link_key(url) != actor for url in urls)):
+        raise ValueError('公开主页类型依据必须是该账号已保存非空简介及自己的准确 HTTPS 主页。')
+    return [account['url']]
+
+
+def correct_identity(store, account_id, *, type, manual_locked=True, note='', evidence_urls=(), evidence_basis='agent_review', _connection=None, _schedule=True, _reviewer='human'):
     from .store import _now
     from .research_repository import _public_json
-    from .account_verification import _independent_source_url, schedule_account_checks
+    from .account_verification import schedule_account_checks
     if not isinstance(type, str) or type not in TYPES or not isinstance(manual_locked, bool):
         raise ValueError('账号类型或人工锁定值无效。')
     if not isinstance(note, str) or len(note) > 1000 or len(evidence_urls) > 5:
         raise ValueError('人工类型说明或依据超过上限。')
-    urls = list(dict.fromkeys(_independent_source_url(url) for url in evidence_urls))
     with (nullcontext(_connection) if _connection is not None else store._transaction(write=True)) as connection:
         account = _locked_account(store, connection, account_id)
+        urls = type_evidence_urls(account, evidence_urls, evidence_basis)
         metadata = dict(account.get('metadata') or {})
         previous = metadata.get('account_identity') or {}
         if _reviewer == 'deepseek_auto_review' and previous.get('manual_locked') is True:
             raise ValueError('自动审核不覆盖已锁定的人工类型。')
         revision = previous.get('revision', 0) if isinstance(previous, dict) else 0
         revision = revision if isinstance(revision, int) and not isinstance(revision, bool) else 0
-        metadata['account_identity'] = {'version': 1, 'type': type, 'basis': 'manual_review' if _reviewer == 'human' else 'evidence_review',
-            'confidence_scope': '人工登记的账号类型；不是模型推断，不等于组织隶属或观点真实性。' if _reviewer == 'human' else '经授权的 Agent 公开证据审核结果；账号核验、组织隶属和观点真实性分别判断。',
+        profile_basis = evidence_basis == 'public_profile_description'
+        scope = ('公开主页自述的发布主体类型；不确认官方账号、实名、组织隶属、政治身份或观点真实性。' if profile_basis else
+                 '人工登记的账号类型；不是模型推断，不等于组织隶属或观点真实性。' if _reviewer == 'human' else
+                 '经授权的 Agent 公开证据审核结果；账号核验、组织隶属和观点真实性分别判断。')
+        metadata['account_identity'] = {'version': 1, 'type': type,
+            'basis': 'public_profile_statement' if profile_basis else 'manual_review' if _reviewer == 'human' else 'evidence_review',
+            'classification_basis': evidence_basis, 'confidence_scope': scope,
             'reviewed_by': _reviewer,
             'manual_locked': manual_locked, 'evidence_urls': urls, 'reviewed_at': _now(),
             'note': note.strip(), 'revision': revision + 1}

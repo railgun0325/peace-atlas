@@ -1,5 +1,19 @@
 # PEACE ATLAS desktop packages
 
+Current candidate: **PEACE ATLAS 2.0.0, foundation correction closeout, 2026-10-11**. Freeze `7926d2406f86f8ccd7b3faa2c101be919af44426bcea9d738fd7c87eb1fa01d4` contains 3,154 application files (Windows 3,140; Mac 3,143) and 152 test files. **3,012 backend + 198 frontend + 62 desktop + 25 builder = 3,297 tests** passed. The new fixed source commit, tag and Release do not exist yet. See [the current closeout record](../docs/RELEASE_FINAL_20261011.md), [source manifest](../docs/release-evidence/final-source-manifest-20261011.json) and [source tests](../docs/release-evidence/final-source-tests-20261011.json).
+
+Current local Windows bundle **`20261011-140711`** passed archive/frozen-source auditing, packed Agent/SDK and core checks, isolated native acceptance, and formal upgrade with all 23 table schemas, types and rows exactly preserved. The locally assembled Mac archive passed its archive and source-byte audit; it is staging for separate native acceptance. This freeze has not yet run the cloud Windows or Mac native workflows. The formal 601-source report completed its Harness phase and accepted the first synthesis batch; later synthesis is still running. The 216-item review is queued with no results. Private source/tag/draft creation and pinned native CI may proceed in parallel; final report/review content and both native platforms remain final delivery gates.
+
+The updated manual retains 20 sections and 26 parameter tables, including account self-description classification and bounded JST activity-date rules. Its updated offline HTML has not been uploaded. The [private repository's existing Releases](https://github.com/railgun0325/peace-atlas/releases) are the only download index currently linked; **this candidate is not delivered yet**. Windows is unsigned; Mac uses the ad-hoc strategy, not Developer ID signing or Apple notarization. macOS 13 is the declared minimum; actual native OS/version coverage must be recorded separately.
+
+Historical quality candidate: application commit `51c1a1523918af92fce5d340e21d30729630ab6c`, fixed tag `v2.0.0-foundation-quality.20261011`, freeze `29f708de52ac1f0b7ad2fab64a8a81a7342e3f50368be51ec741486994ebf9a6`. Its 3,107 source tests, local Windows `071719`, cloud Windows run [38121672880](https://github.com/railgun0325/peace-atlas/actions/runs/38121672880), and native Mac run [38125026790](https://github.com/railgun0325/peace-atlas/actions/runs/38125026790) apply to that immutable old source. Archives, checksums and acceptance receipts remain in its private draft; see [the historical quality record](../docs/RELEASE_QUALITY_20261011.md).
+
+Historical quality Mac acceptance ran on **macOS 15.7.9 ARM64**: actual desktop/backend startup, secure storage, offline fonts and layout, a one-million-item preview without task creation, an actual downloaded SQLite backup with integrity validation, bundled visible/headless Chromium, native `codesign --verify --deep --strict`, and extraction/repack round-trip checks passed. Two Mach-O native addons were legitimately re-signed; the application source freeze remained unchanged. Seven actual screenshots were independently inspected. The Mac backup test records SQLite `quick_check`; a separate foreign-key result was not recorded there. This is ad-hoc integrity signing, **not Developer ID signing or notarization**. Windows remains unsigned. macOS 13 is the declared minimum, not an assertion that this run exercised every supported OS version.
+
+Historical receipt candidate: Windows `115947` and its own archive, SDK/native and 23-table upgrade receipts are retained in [the receipt record](../docs/RELEASE_RECEIPT_20261011.md). Its real report failed; that candidate is not the current `140711` package.
+
+The following release paragraphs retain their historical artifact and acceptance scope.
+
 Verified release: **PEACE ATLAS 2.0.0, automatic review and transport recovery, 2026-10-11**, source-frozen build `20261011-023729`. The private GitHub release tag is `v2.0.0-review-assurance.20261011`. **2,688 backend + 172 frontend + 62 desktop + 17 builder = 2,939 tests** passed. The actual new Windows package passed native isolated launch, 14 core flows, 30 Agent CLI executions and a controlled run of the bundled official DSH SDK/runtime 0.2.0-rc.2. Empty response and HTTP 503 recovery used 4 transport attempts for 2 successful decision rounds; all 10 tools executed once and 4 decisions committed atomically. Formal upgrade preserved all 22 tables by exact row/type/schema comparison. Real model results are recorded separately in the [release record](../docs/RELEASE_20261011.md), alongside archive hashes and [safe build receipts](../docs/release-evidence/20261011.json). **Mac native launch, native Apple signature verification and notarization remain unverified.** Windows and Apple Silicon archives were audited against the same source freeze; asset names retain the historical harness-candidate-20261010 suffix. The version records below retain their historical scope.
 
 
@@ -104,11 +118,7 @@ foundation-reuse package. The old `Electron` basename made Electron 44.5.1 treat
 the application as an unpackaged development app and select the host Python
 instead of the bundled backend. The corrected candidate still requires a new
 source freeze, build and native acceptance; earlier archive or signing success
-does not establish startup success for it. The current `-foundation-quality-20261011`
-candidate retains that repair and adds the narrowly scoped report username
-normalization and evidence-note reuse fixes. Its independent acceptance is recorded
-in [the quality release record](../docs/RELEASE_QUALITY_20261011.md); no old test or
-package receipt establishes success for the new source.
+does not establish startup success for it. The builder suffix remains `-foundation-quality-20261011` for the current correction candidate; it is a filename convention, not a binding to the historical quality source. The current freeze and separate local/native/real-model scope are recorded in [the closeout record](../docs/RELEASE_FINAL_20261011.md). Historical source and package receipts retain their own scope.
 
 Outputs are in `dist/`:
 
@@ -137,8 +147,8 @@ private Python and packaged backend. Helper executable names remain unchanged.
 The archive audit checks that the main binary is present exactly once, agrees
 with the plist, retains its executable bit and has no leftover `Electron` main
 binary. Packaging removes the invalidated top-level signature.
-**The macOS ZIP has not been launch-validated on a Mac.** Without `--mac-signing
-wsl`, it is a staging bundle that requires native signature finalization.
+**The raw ZIP produced on Windows is a staging artifact; final native Mac Release acceptance is a separate step.** Without `--mac-signing
+wsl`, that raw archive requires native signature finalization.
 With that option, it has an ad-hoc signature plus the independent checks above,
 and still requires native acceptance. Modifying Electron's Info.plist and
 resources invalidates its original outer signature, so signatures must be made
@@ -161,9 +171,10 @@ finalizer reads and validates `CFBundleExecutable` before signing or launching
 the app; it uses the renamed binary without overriding `app.isPackaged`.
 Its audit directory contains the signing
 log, the smoke screenshot, and health JSON. Errors keep a readable Terminal
-window open with the log location; success prints the ready app path. The script has
-not been executed on macOS in the Windows build environment. Do not label the
-staging ZIP as a Mac launch-tested artifact before native completion.
+window open with the log location; success prints the ready app path. Building on
+Windows alone does not execute this script on macOS. The historical quality Release native
+asset above completed the script and independent Mac acceptance; an unrelated raw
+staging ZIP does not inherit that result.
 It also runs the bundled Python `browser_smoke.py` to launch the private Chromium
 in visible and headless modes, render an offline `about:blank` page, and close
 each browser. This does not log in to any external account or navigate a network

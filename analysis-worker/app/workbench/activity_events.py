@@ -80,8 +80,9 @@ def item_activities(item):
         if not isinstance(review, dict) or review.get("item_id") != item["id"]:
             continue
         row = {**review, "id": key}
-        if row.get("source_capture_hash") != capture_hash(item):
-            row.update(status="candidate", review_outcome="pending", reason="来源正文已更正，原核对结论需重新确认。", stale=True)
+        from .activity_review_support import review_basis_stale
+        if row.get("source_capture_hash") != capture_hash(item) or review_basis_stale(item, row.get("review_basis")):
+            row.update(status="candidate", review_outcome="pending", reason="来源正文、原帖时间或其采集依据已更正，原核对结论需重新确认。", stale=True)
         candidates[key] = row
     return list(candidates.values())
 
@@ -137,7 +138,7 @@ class ActivityRepository:
         from .research_repository import _public_json
         if not isinstance(data, dict):
             raise ValueError("活动核对信息无效。")
-        allowed = {"id", "status", "title", "date", "prefecture", "quote", "merge_with", "note"}
+        allowed = {"id", "status", "title", "date", "prefecture", "quote", "merge_with", "note", "review_basis"}
         if set(data) - allowed:
             raise ValueError("活动核对含未知字段。")
         status = data.get("status", "confirmed")
@@ -161,6 +162,8 @@ class ActivityRepository:
                 raise ValueError("请先从回收站恢复该资料，再核对活动。")
             if quote.strip() not in str(item.get("title", "")) + "\n" + str(item.get("content", "")):
                 raise ValueError("摘录必须能在当前保存的原文中找到；来源更正后请重新核对。")
+            from .activity_review_support import validate_saved_review_basis
+            review_basis = validate_saved_review_basis(item, data.get("review_basis"), data)
             source = _url(item.get("url"))
             if status == "confirmed" and not source:
                 raise ValueError("活动统计需要可访问的公开来源 URL。")
@@ -190,6 +193,8 @@ class ActivityRepository:
                       "source_url": source, "event_key": event_key,
                       "source_capture_hash": capture_hash(item), "basis": "human_review" if _reviewer == 'human' else 'evidence_review',
                       "reviewed_by": _reviewer, "reviewed_at": _now(), "note": note}
+            if review_basis is not None:
+                review["review_basis"] = review_basis
             previous = reviews.get(identity)
             if previous:
                 history = previous.get("history", [])

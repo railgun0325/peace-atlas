@@ -25,6 +25,7 @@ class IdentityDecision(Strict):
     note: str = Field(min_length=1, max_length=1000)
     evidence_urls: list[str] = Field(default_factory=list, max_length=5)
     manual_locked: bool = False
+    evidence_basis: Literal['agent_review', 'independent_source', 'public_profile_description'] = 'agent_review'
 
 
 class SourceDecision(Strict):
@@ -65,6 +66,7 @@ class ActivityDecision(BoundDecision):
     quote: str = Field(min_length=1, max_length=2000)
     merge_with: str = ''
     note: str = Field(min_length=1, max_length=1600)
+    review_basis: dict | None = None
 
 
 class BatchArgs(Strict):
@@ -115,7 +117,8 @@ def digest(value):
 def activity_digest(item, activity):
     # Sibling reviews share item metadata. Only this activity and its original
     # evidence bind its decision, so another reviewed paragraph is not a conflict.
-    return digest({'source': {key: item.get(key) for key in ('id', 'title', 'url', 'content', 'published_at')}, 'activity': activity})
+    from .activity_review_support import activity_source_projection
+    return digest({'source': activity_source_projection(item), 'activity': activity})
 
 
 def _queue(store, connection, kind, pending_only):
@@ -147,8 +150,9 @@ def _queue(store, connection, kind, pending_only):
         for activity in item_activities(item):
             if pending_only and (activity['status'] != 'candidate' or activity.get('review_outcome') == 'inconclusive' and not activity.get('stale')):
                 continue
+            from .activity_review_support import activity_source_projection
             result.append({'kind': kind, 'id': activity['id'], 'expected_sha256': activity_digest(item, activity), 'record': activity,
-                           'source': {key: item.get(key) for key in ('id', 'title', 'url', 'content', 'published_at')}})
+                           'source': activity_source_projection(item)})
     return result
 
 
@@ -199,7 +203,8 @@ def _bound_rows(store, connection, payload):
                 if identity_value:
                     if not identity_value.note.strip():
                         raise ValueError('请提供账号类型核对说明。')
-                    urls = [_independent_source_url(url) for url in identity_value.evidence_urls]
+                    from .account_identity import type_evidence_urls
+                    urls = type_evidence_urls(account, identity_value.evidence_urls, identity_value.evidence_basis)
                     if identity_value.type != 'unknown' and not urls:
                         raise ValueError('批量判定组织或个人需要独立公开来源；无依据请记为未判定。')
                 if decision.sources is not None:
@@ -226,6 +231,9 @@ def _bound_rows(store, connection, payload):
                     raise ValueError('活动举办地不是有效都道府县。')
                 if decision.status == 'confirmed' and (not decision.date or not _url(item.get('url'))):
                     raise ValueError('确认活动需要活动日期与公开原文来源。')
+                if decision.review_basis is not None:
+                    from .activity_review_support import validate_saved_review_basis
+                    validate_saved_review_basis(item, decision.review_basis, decision.model_dump())
                 if decision.merge_with:
                     targets = [event for row in store._execute(connection, 'SELECT * FROM wb_items WHERE ' + store.item_visibility()).fetchall()
                                for event in item_activities(store._item(row)) if event.get('event_key') == decision.merge_with and event['status'] == 'confirmed']

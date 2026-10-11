@@ -1,0 +1,51 @@
+{
+  "recorded_at": "2026-10-11T14:07:57.077349+00:00",
+  "ok": true,
+  "source_freeze_sha256": "7926d2406f86f8ccd7b3faa2c101be919af44426bcea9d738fd7c87eb1fa01d4",
+  "shipping_files": 3154,
+  "public_manifest_sha256": "fb6a0460adf751952a3490f9a814a18e137ddf2749305f36109d073832b277a4",
+  "tests": {
+    "backend": {
+      "ok": true,
+      "passed": 3012,
+      "failed": 0,
+      "seconds": 366.18,
+      "sha256": "dfcbc0f384fefdea7ca8ef03371f05428d9c194d255170139b543f145d72bccc",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "frontend": {
+      "ok": true,
+      "passed": 198,
+      "failed": 0,
+      "seconds": 55.4846567,
+      "sha256": "e26c526c895fcde0ae02254547fdf1eb9962617469a2d1405d5f719e3b33ca8c",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "desktop": {
+      "ok": true,
+      "passed": 62,
+      "failed": 0,
+      "seconds": 13.2533953,
+      "sha256": "897f9983094cf8e2780ce94be40434ca1f8869b8a5a07af2b4dc07574484f328",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "builder": {
+      "ok": true,
+      "passed": 25,
+      "failed": 0,
+      "seconds": 5.56,
+      "sha256": "fc8c1b13ede81c9fe267af628ddbebbe4fd66e5bb23659644175915e1e393bc1",
+      "exit_code": 0,
+      "fixture_model_only": true
+    }
+  },
+  "passed": 3297,
+  "failed": 0,
+  "fixture_model_only": true,
+  "new_platform_package_acceptance": "pending",
+  "new_real_model_report_acceptance": "pending",
+  "boundary": "Full suite counts overlap focused regressions. No real model or native package acceptance is implied."
+}
