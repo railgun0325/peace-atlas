@@ -320,14 +320,47 @@ jobs:
               raise SystemExit('Finalizer concluding isolated open failed')
           secure_storage_checks['finalizer_post_open_desktop'] = require_secure_storage(post_open_desktop, 'finalizer_post_open_desktop')
           command('codesign-after-finalization', ['codesign', '--verify', '--deep', '--strict', '--verbose=2', str(app)])
+          def require_optional_ui_smokes(desktop, profile):
+              checks = desktop.get('checks')
+              if not isinstance(checks, dict) or any(name in checks for name in ('sessions', 'collection', 'report', 'research', 'connection_recovery')):
+                  raise SystemExit('Independent UI acceptance must not request paid, network or account operations')
+              budgets = checks.get('budgets')
+              if not isinstance(budgets, dict) or budgets.get('boundary_preview_ready') is not True or type(budgets.get('preview_created_jobs')) is not int or budgets['preview_created_jobs'] != 0:
+                  raise SystemExit('Independent read-only budget preview must complete without creating jobs')
+              typography = checks.get('typography')
+              if not isinstance(typography, dict):
+                  raise SystemExit('Independent bundled typography acceptance is missing')
+              for surface in ('overview', 'workspace'):
+                  details = typography.get(surface)
+                  if not isinstance(details, dict) or details.get('horizontal_overflow') is not False:
+                      raise SystemExit('Independent bundled typography must fit each native surface')
+                  fonts = details.get('fonts')
+                  if not isinstance(fonts, list) or not all(any(isinstance(font, dict) and font.get('status') == 'loaded' and isinstance(font.get('family'), str) and family in font['family'] for font in fonts) for family in ('Atlas Mincho', 'Atlas Signal')):
+                      raise SystemExit('Independent native typography requires both bundled fonts loaded')
+              composer = typography.get('composer')
+              if not isinstance(composer, dict) or composer.get('dialog_overflow') is not False:
+                  raise SystemExit('Independent native typography composer must fit')
+              images = []
+              for name in ('desktop-eva-overview.png', 'desktop-eva-workspace.png', 'desktop-eva-composer.png', 'desktop-budget-controls.png', 'desktop-budget-preview.png'):
+                  data = (profile / name).read_bytes()
+                  if len(data) < 24 or data[:8] != b'\x89PNG\r\n\x1a\n' or data[12:16] != b'IHDR':
+                      raise SystemExit('Independent typography/budget screenshot is not a PNG')
+                  width, height = int.from_bytes(data[16:20], 'big'), int.from_bytes(data[20:24], 'big')
+                  if width < 640 or height < 400:
+                      raise SystemExit('Independent typography/budget screenshot dimensions are invalid')
+                  images.append({'name': name, 'width': width, 'height': height, 'sha256': hashlib.sha256(data).hexdigest()})
+              return {'typography': True, 'read_only_budgets': True, 'screenshots': images}
           profile = evidence / 'isolated-profile'
           profile.mkdir()
-          launch_env = dict(env, WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SMOKE_BACKUP='1')
+          # Use the same existing router-driven typography/budget/backup order accepted on Windows.
+          launch_env = dict(env, WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SMOKE_BACKUP='1',
+                            WORKBENCH_SMOKE_TYPOGRAPHY='1', WORKBENCH_SMOKE_BUDGETS='1')
           command('native-launch', [str(executable)], env=launch_env, timeout=300)
           desktop = json.loads((profile / 'desktop-smoke.json').read_text())
           if desktop.get('health', {}).get('ok') is not True or not (profile / 'desktop-smoke.png').stat().st_size:
               raise SystemExit('Independent native desktop/backend smoke failed')
           secure_storage_checks['independent_desktop'] = require_secure_storage(desktop, 'independent_desktop')
+          native_ui_evidence = require_optional_ui_smokes(desktop, profile)
           backup = desktop.get('checks', {}).get('backup', {})
           backup_path = pathlib.Path(backup['file']).resolve(strict=True)
           if not backup_path.is_relative_to(profile.resolve()) or backup.get('source_draft_unchanged') is not True:
@@ -386,6 +419,8 @@ jobs:
                         'secure_storage': True, 'secure_storage_checks': secure_storage_checks,
                         'finalized_zip_roundtrip_codesign_and_bytes': True,
                         'native_desktop_backend': True, 'native_backup_sqlite_integrity': True, 'bundled_browser': browser,
+                        'native_typography': native_ui_evidence['typography'], 'native_read_only_budgets': native_ui_evidence['read_only_budgets'],
+                        'native_ui_screenshots': native_ui_evidence['screenshots'],
                         'application_macho_hashes_changed_by_signing': changed,
                         'frozen_non_macho_application_unchanged': True, 'real_model_calls': 0, 'formal_user_data_accessed': False,
                         'notarization': 'not performed', 'quarantine_or_gatekeeper_changes': False,
@@ -418,6 +453,8 @@ jobs:
           required_secure_stages = {'finalizer_desktop', 'finalizer_post_open_desktop', 'independent_desktop'}
           if accepted.get('secure_storage') is not True or not isinstance(secure_checks, dict) or set(secure_checks) != required_secure_stages or any(value is not True for value in secure_checks.values()):
               raise SystemExit('All three explicit secure storage acceptance checks are required before upload')
+          if accepted.get('native_typography') is not True or accepted.get('native_read_only_budgets') is not True:
+              raise SystemExit('Independent native typography and read-only budget acceptance are required before upload')
           release = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
           if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
               raise SystemExit('The same private draft must still exist')
@@ -471,6 +508,8 @@ jobs:
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.json
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-smoke*.png
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-backup-controls.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-eva-*.png
+            ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/desktop-budget-*.png
             ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/logs/desktop.log
             ${{ runner.temp }}/peace-atlas-native-source/evidence/native-tmp/peace-atlas-sign.*/smoke/logs/backend.log
             ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/logs/desktop.log
