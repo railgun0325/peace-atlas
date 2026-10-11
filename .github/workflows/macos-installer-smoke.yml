@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
 
 # This workflow consumes the accepted release assets. It does not build or publish.
+# GitHub requires write permission to read the fixed draft release before publication.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: peace-atlas-macos-installer-smoke
