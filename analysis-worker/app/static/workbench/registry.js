@@ -4,6 +4,8 @@ import { interactiveGraph } from './interactive_graph.js';
 import { selectGraph, selectResearchGraph, researchRelevance, relationshipNames, accountTypeInfo, accountTypeBasisName } from './network_model.js';
 import { openAccountEdit } from './actions.js';
 import { openAccountRelations } from './social.js';
+import { accountTypeControls } from './account_type.js';
+import { openFastClassification } from './review.js';
 
 export function openPublicVerification(ctx, account = null, accountIds = []) {
   const modal = dialog(account ? `自动核验 · ${account.name || account.handle}` : '批量核验公开账号', { subtitle: 'PUBLIC SOURCE / EXACT ACCOUNT LINK' });
@@ -106,7 +108,7 @@ export function openResearchRelevance(ctx, node, refresh) {
 
 export async function renderRegistry(ctx) {
   let graph = await api('accounts/network', { signal: ctx.signal });
-  const content = el('div', { class: 'registry-network' }, heading('03', '账号关系图', 'PUBLIC CONNECTIONS / SOURCE REGISTRY', '跨研究查看已有公开关注和原帖提及。点账号查看身份核验，点连线回到证据。研究中的新证据会自动更新。', [linkButton('返回组织与账号', '#accounts', 'secondary'), button('核验候选账号', () => openPublicVerification(ctx), 'secondary')]));
+  const content = el('div', { class: 'registry-network' }, heading('03', '账号关系图', 'PUBLIC CONNECTIONS / SOURCE REGISTRY', '跨研究查看已有公开关注和原帖提及。点账号快捷更改类型，点连线回到证据。研究中的新证据会自动更新。', [linkButton('返回组织与账号', '#accounts', 'secondary'), button('快速判定账号类型', () => openFastClassification(ctx), 'secondary'), button('核验候选账号', () => openPublicVerification(ctx), 'secondary')]));
   const notice = el('div'), stats = el('div', { class: 'account-stats' }), errors = el('div');
   const inspector = el('aside', { class: 'network-inspector', 'aria-label': '账号关系与来源详情' }), canvas = el('div', { class: 'network-canvas' });
   const stage = el('div', { class: 'research-stage' }, canvas, inspector);
@@ -137,7 +139,7 @@ export async function renderRegistry(ctx) {
     inspector.querySelector('h2').after(el('div', { class: 'account-type-details' }, el('span', { class: 'account-type-label' }, type.label),
       el('p', { class: 'field-hint' }, `类型依据：${accountTypeBasisName(type)}${type.manual_locked ? ' · 人工锁定' : ''}`),
       type.confidence_scope && el('p', { class: 'field-hint' }, type.confidence_scope), type.note && el('p', { class: 'field-hint' }, type.note),
-      type.evidence_urls.map((url, index) => sourceLink(url, `类型依据 ${index + 1}`))));
+      type.evidence_urls.map((url, index) => sourceLink(url, `类型依据 ${index + 1}`)), accountTypeControls(ctx, node, refreshData)));
     inspector.append(el('p', { class: 'field-hint account-relevance-details' }, `${relevance.state === 'excluded' ? '人工排除研究' : relevance.state === 'general_platform' ? '通用平台账号' : relevance.state === 'included' ? '已明确纳入研究' : '研究相关性未判定'} · ${relevance.reason || '保留账号与来源供后续核对。'}`));
     if (node.account_id) inspector.append(el('div', { class: 'actions' }, button('更正账号类型', () => openAccountTypeCorrection(ctx, node, refreshData), 'secondary small'),
       button('更正研究相关性', () => openResearchRelevance(ctx, node, refreshData), 'secondary small'),

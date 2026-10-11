@@ -2,7 +2,7 @@
 
 本机桌面应用通过独立 `/agents/v1` 通道供外部 Agent 操作，不增加内部聊天窗口。普通桌面 API 的 session gate 保持完整；Agent 持有独立、有期限、可撤销的授权。通道默认未授权，公开 manifest/schema 只说明能力和安装方式。
 
-人在桌面 **外部 Agent** 菜单选择只读、采集/研究/报告，或额外含可恢复清理的范围，再导出一个新的 JSON 连接文件。后端先设置仅文件所有者及系统可访问的受保护 ACL，再写入独立随机凭据；POSIX 使用 0600。已有文件拒绝覆盖。凭据不会出现在 ready、API 返回、公开 manifest/schema 或菜单日志。授权默认 8 小时，最长 24 小时；应用重启、到期或撤销失效。撤销不取消已授权创建的业务任务。此机制信任同一系统用户启动的本机进程，不构成针对同用户恶意程序的隔离沙箱。
+人在桌面 **外部 Agent** 菜单选择只读、采集/研究/报告、审核/类型判定/账号核验，或全部业务权限，再导出一个新的 JSON 连接文件。后端先设置仅文件所有者及系统可访问的受保护 ACL，再写入独立随机凭据；POSIX 使用 0600。已有文件拒绝覆盖。凭据不会出现在 ready、API 返回、公开 manifest/schema 或菜单日志。授权默认 8 小时，最长 24 小时；应用重启、到期或撤销失效。撤销不取消已授权创建的业务任务。此机制信任同一系统用户启动的本机进程，不构成针对同用户恶意程序的隔离沙箱。
 
 Agent 使用随包 `agent_assets/peace-atlas/scripts/peace_atlas.py`。它只接受明确 loopback HTTP origin，忽略系统代理，不跟随重定向，不读浏览器 cookies、桌面 token 或 AI keys。数据接口拒绝 Origin/Referer 和远程客户端。管理授权接口只接受桌面原生调用的 session header，不接受仅浏览器 cookie 的授权导出。
 
@@ -10,7 +10,13 @@ Agent 使用随包 `agent_assets/peace-atlas/scripts/peace_atlas.py`。它只接
 
 报告续跑增加只读 `job.retry_preview`，先检查完整原输入是否存在、当前来源与审核上下文的变化、阅读复用候选和各阶段影响。`job.retry` 的 `options.input_mode` 默认 `original`；`latest` 需要明确选择，不能在旧快照缺失时自动降级。预览绑定所选输入，执行重新验证，随后任务使用已固定的输入。无需 Agent 读取 AI Key 或逐条点击界面。自动审核的 `review.start` 另支持来源缓存方式及有效期，默认复用一小时内成功捕获的公开内容；关闭网络时不会借缓存读取外部来源，账号身份结论仍独立核验。完整参数以运行中 schema 和随包 API 引用为准。
 
-自动审核沿用 `collect` 任务并以 `_evidence_review:true` 标识。读取进度仍用 `job.get`；取消与续跑必须具有 `review` 授权，不能只凭普通采集/研究的 `run` 权限操作。预览与执行均重新检查真实任务；schema 的 `scope_by_job` 给出这项区别。普通任务继续按 `run` 校验，登录与会话任务不开放。
+快速类型分类使用 `classify.start`，需 `review` 权限。参数为 `account_ids:[]`、`batch_size:100`、`recheck:false`；每批严格整数 1–200，明确编号最多 2000 个，空数组选择全部符合条件的已保存账号。默认处理未审和未判定类型，true 还纳入已有组织/个人类型；人工锁定和已排除账号始终跳过。它只向应用已配置的 DS 模型发送保存名称、用户名和公开简介，名称可作启发线索；不读取公开网页、不自动核验身份，仍有实际远程模型请求与费用。
+
+账号列表与图谱详情的快捷改正会写入并锁定人工类型，不改变核验状态；解除类型锁定保留原决定，不立即分类。外部 Agent 未新增任意类型修改或解除锁定操作，使用页面人工控制。
+
+快速分类沿用 `collect` 并以 `_account_classification:true` 标识，严格自动审核以 `_evidence_review:true` 标识。读取进度仍用 `job.get`；两类任务的取消与续跑必须具有 `review` 授权，不能只凭普通采集/研究的 `run` 权限操作。预览与执行均重新检查真实任务；schema 的 `scope_by_job` 给出这项区别。普通任务继续按 `run` 校验，登录与会话任务不开放。
+
+快速分类每批决定与进度原子保存，正常取消、失败或中断保留已提交批次；重试沿同一快照跳过已完成账号，未提交材料变化时应重新预估创建当前范围新任务。严格 `review.start` 继续审核 accounts、claims、activities，默认每批 16、最多 40；API 未传 `kinds` 时包含三类，当前页面默认 claims/activities、账号证据审核另选。身份核验与活动/关系证据规则继续独立执行。
 
 预览保存标准化完整参数、授权身份、业务预估或清理 digest，五分钟有效。执行要求同一预览、完整参数、`confirmed:true` 和稳定操作键；并发提交串行处理。匹配重复请求返回原结果，包括业务失败和未确认异常；同一个已消费预览不能换新键执行。记录仅在当前后端授权生命周期内保留，重启后通过已保存任务 ID 查询业务状态。研究和续查继续使用业务层的参数及当前 run/job 绑定令牌，不能绕过 UI 同等级的确认校验。报告预览说明参数和模型/网络影响，不声称已实测的运行时间。
 
@@ -23,6 +29,6 @@ from .agent_api import register_agent_api
 register_agent_api(app)
 ```
 
-打包必须包含 `agent_api.py`，以及 `agent_assets` 内明确白名单的 manifest、安装说明、SKILL、openai.yaml、API 引用和 Python CLI 六项。不要递归打包后来导出的连接文件、安装结果或凭据。
+打包必须包含 `agent_api.py`，以及 `agent_assets` 内明确白名单的 manifest、安装说明、SKILL、openai.yaml、API 引用和 Python CLI 七项（包括 AUTOMATIC_REVIEW.md）。不要递归打包后来导出的连接文件、安装结果或凭据。
 
 隔离验收在 `tests/test_workbench_agent_api.py` 使用自己的数据库、合成 session、独立临时连接与 loopback 服务。实际 CLI 创建证据报告、重复请求返回同一 job，并读取报告及来源引用；模型/公开平台的真实付费调用不属于该隔离证明。桌面菜单行为在不启动 Electron 或后端的隔离 VM 中测试；正式原生窗口的视觉/交付验收由统一打包阶段进行。

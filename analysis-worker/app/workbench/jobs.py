@@ -283,6 +283,24 @@ class JobRunner:
                 raise ValueError(result.get("message") or "平台登录未完成，请重试。")
             return result
         if job["kind"] == "collect":
+            if params.get('_account_classification') is True:
+                from .fast_account_classification import run_classification
+                previous_phase = None
+
+                async def classification_checkpoint(value):
+                    nonlocal previous_phase
+                    await asyncio.to_thread(self.store.update_job, jid, result=value,
+                        progress=round(value.get('completed', 0) / max(1, value.get('total', 0)) * 90))
+                    if value.get('phase') != previous_phase:
+                        previous_phase = value.get('phase')
+                        labels = {'starting': '准备范围', 'classifying': 'DS 快速判定账号类型', 'saving': '保存本批类型', 'complete': '类型粗分完成'}
+                        await asyncio.to_thread(self.store.add_job_event, jid,
+                            f"类型粗分：{labels.get(previous_phase, '处理本批')}；已保存 {value.get('completed', 0)}/{value.get('total', 0)} 项。")
+
+                result = await run_classification(self.store, job, checkpoint=classification_checkpoint,
+                    cancelled=lambda: bool((self.store.get_job(jid) or {}).get('cancel_requested')))
+                committing.set()
+                return result
             if params.get('_evidence_review') is True:
                 from .automated_review import run_auto_review
                 previous_phase = None

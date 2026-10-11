@@ -1,6 +1,6 @@
 # PEACE ATLAS 基础架构复审
 
-复审日期：2026-10-11。本文说明产品与工程方向；具体发布文件、真实运行结果和验证边界统一记录在 [本轮发布验收](RELEASE_20261011.md)。分阶段实施与验收见 [路线图](ROADMAP.md)。
+复审日期：2026-10-11。本文说明产品与工程方向；具体发布文件、真实运行结果和验证边界统一记录在 [本轮发布验收](https://github.com/railgun0325/peace-atlas/blob/776e5854653b5776c0c0d5b0ba17e3e5a47bf278/docs/RELEASE_20261011.md)。分阶段实施与验收见 [路线图](ROADMAP.md)。
 
 本文的现状判断以 `review-assurance` 冻结版本为基线。后续已实现的跨任务网页复用、报告固定输入恢复及其最新验证范围见 [第一批实现记录](FOUNDATION_IMPLEMENTATION_20261011.md)；下文保留原基线，便于比较改进前后的行为。
 
@@ -22,7 +22,7 @@
 | 持久任务队列、取消/退出保护、已完成审核批次与进度原子保存 | 单项 work ledger、依赖局部失效、资源分类调度、worker lease |
 | Agent API/CLI 的 read/run/cleanup/review 范围、撤销及操作预览 | 调用同一业务合同的薄 MCP adapter |
 
-本轮已有冻结源码回归收据为 **2939 项：2688 后台、172 前端、62 桌面、17 构建检查**。这保护了大量当前行为与约束；它不证明上述规划已实施，也不代替真实平台、真实模型、检索召回、性能或耐久性验收。详见 [发布验收](RELEASE_20261011.md)。
+本轮已有冻结源码回归收据为 **2939 项：2688 后台、172 前端、62 桌面、17 构建检查**。这保护了大量当前行为与约束；它不证明上述规划已实施，也不代替真实平台、真实模型、检索召回、性能或耐久性验收。详见 [发布验收](https://github.com/railgun0325/peace-atlas/blob/776e5854653b5776c0c0d5b0ba17e3e5a47bf278/docs/RELEASE_20261011.md)。
 
 ## 2. 当前数据流与保留价值
 
@@ -45,7 +45,7 @@
 
 目前全局资料库可以消除重复存储，但研究节点和主张身份以研究运行作为边界。自动审核的网页和账号搜索缓存仅在本次运行内共享；显式 retry 会重新建立缓存。报告可复用 parent checkpoint 的已完成片段，仍没有跨任务来源阅读资产。
 
-本轮复审确认，主张身份包含研究运行 ID，相同来源与命题在不同研究中仍可重复进入审核。不同观察和限定应保留，但不能按记录数算作独立证据；对象限定不同也不能粗暴合并。依据为 [主张保存](../analysis-worker/app/workbench/research_repository.py#L816)、[审核运行](../analysis-worker/app/workbench/automated_review.py#L371)、[来源阅读](../analysis-worker/app/workbench/report_analysis.py#L552)，实际运行验收见 [发布记录](RELEASE_20261011.md)。
+本轮复审确认，主张身份包含研究运行 ID，相同来源与命题在不同研究中仍可重复进入审核。不同观察和限定应保留，但不能按记录数算作独立证据；对象限定不同也不能粗暴合并。依据为 [主张保存](../analysis-worker/app/workbench/research_repository.py#L816)、[审核运行](../analysis-worker/app/workbench/automated_review.py#L371)、[来源阅读](../analysis-worker/app/workbench/report_analysis.py#L552)，实际运行验收见 [发布记录](https://github.com/railgun0325/peace-atlas/blob/776e5854653b5776c0c0d5b0ba17e3e5a47bf278/docs/RELEASE_20261011.md)。
 
 规划建立共享来源层：规范 URL、捕获时间、capture hash、提取器及版本、完整性、失败原因与重试时刻。原文、片段和可复用事实按来源版本保存；目标相关性与最终判断按问题、命题和策略版本保存。缓存只复用完成且仍适用的结果；原文变化、限定变化或冲突使依赖结果失效。独立来源簇、转载簇和采集次数分别统计。
 

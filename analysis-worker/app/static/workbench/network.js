@@ -4,6 +4,7 @@ import { openCollect, openReportCreate } from './actions.js';
 import { readDraft } from './drafts.js';
 import { interactiveGraph } from './interactive_graph.js';
 import { renderRegistry, openResearchRelevance } from './registry.js';
+import { accountTypeControls } from './account_type.js';
 import { relationshipNames, nodeStateNames, accountState, accountTypeInfo, accountTypeBasisName, researchRelevance, explicitResearchRoots, selectGraph, selectResearchGraph, discoveryForest, graphPositions } from './network_model.js';
 import { openResearchResume, frontierRecoveryStatus } from './research_resume.js';
 import { continuationState } from './research_resume_model.js';
@@ -125,7 +126,7 @@ export async function renderNetwork(ctx) {
     setContent(inspector, el('div', { class: 'eyebrow' }, `ACCOUNT / LAYER ${node.depth}`), el('h2', {}, node.name || node.handle), el('p', { class: 'mono muted small-text' }, node.account_key), badge(accountState(node)), el('p', { class: 'network-discovery-note' }, discoveryReason(node)), node.parent_key && el('p', { class: 'field-hint' }, `上一层：${node.parent_key}`), evidenceLinks(node.evidence_urls), node.url && sourceLink(node.url, '访问公开主页'), el('div', { class: 'divider' }), el('h3', {}, `已观察关系 · ${relations.length}`), relations.length ? el('ul', { class: 'network-relation-list' }, relations.map(edge => el('li', {}, el('strong', {}, `${relationshipNames[edge.relationship] || edge.relationship} → ${edge.source_key === node.account_key ? edge.target_key : edge.source_key}`), evidenceLinks(edge.evidence_urls)))) : el('p', { class: 'muted small-text' }, '本次尚无可保存的关系证据。'), el('div', { class: 'divider' }), el('h3', {}, `保存的帖子 · ${accountItems.length}`), accountItems.map(item => el('article', { class: 'network-post' }, el('time', { class: 'mono muted small-text' }, dateText(item.published_at)), el('p', {}, short(item.content || item.title, 330)), sourceLink(item.url, '核对原帖'))));
     inspector.querySelector('h2').after(el('div', { class: 'account-type-details' }, el('span', { class: 'account-type-label' }, type.label),
       el('p', { class: 'field-hint' }, `类型依据：${accountTypeBasisName(type)}${type.manual_locked ? ' · 人工锁定' : ''}`),
-      type.confidence_scope && el('p', { class: 'field-hint' }, type.confidence_scope), evidenceLinks(type.evidence_urls),
+      type.confidence_scope && el('p', { class: 'field-hint' }, type.confidence_scope), type.note && el('p', { class: 'field-hint' }, type.note), evidenceLinks(type.evidence_urls), accountTypeControls(ctx, node, refresh),
       button('以此为起点继续研究', () => ctx.navigate('network', { compose: 'research', source: node.platform, handle: node.handle }), 'secondary small')));
     const relevance = researchRelevance(node);
     inspector.append(el('p', { class: 'field-hint account-relevance-details' }, `${relevance.state === 'excluded' ? '人工排除研究' : relevance.state === 'general_platform' ? '通用平台账号' : relevance.state === 'included' ? '已明确纳入研究' : '研究相关性未判定'} · ${relevance.reason || '保留账号与来源供后续核对。'}`),

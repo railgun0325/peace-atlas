@@ -149,7 +149,7 @@ def main(argv=None):
         commands.add_parser(name)
     for name in ("read", "preview"):
         command = commands.add_parser(name)
-        command.add_argument("operation")
+        command.add_argument("operation", help="Operation from schema; classify.start quickly classifies saved account names, handles and bios; review.start performs evidence review")
         group = command.add_mutually_exclusive_group()
         group.add_argument("--json", default="{}")
         group.add_argument("--input", type=Path)

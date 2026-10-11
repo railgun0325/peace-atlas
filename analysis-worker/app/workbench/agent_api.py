@@ -180,7 +180,7 @@ class AgentAccess:
                 raise HTTPException(404, "任务不存在。")
             if job["kind"] not in {"collect", "research", "report"}:
                 raise HTTPException(403, "Agent 不能操作登录或会话任务。")
-            if job["kind"] == "collect" and job["params"].get("_evidence_review") is True:
+            if job["kind"] == "collect" and (job["params"].get("_evidence_review") is True or job["params"].get("_account_classification") is True):
                 scope = "review"
         if scope not in grant["scopes"]:
             raise HTTPException(403, "本次授权不包含此操作的权限。")
@@ -246,6 +246,8 @@ class AgentAccess:
             return await self.invoke('POST', '/api/v2/reviews/batch/preview', body=args)
         if operation == 'review.start':
             return await self.invoke('POST', '/api/v2/reviews/estimate', body=args)
+        if operation == 'classify.start':
+            return await self.invoke('POST', '/api/v2/accounts/classify/estimate', body=args)
         if operation == "research.start":
             return await self.invoke("POST", "/api/v2/research/estimate", body=args["params"])
         if operation == "research.continue":
@@ -274,6 +276,8 @@ class AgentAccess:
             return await self.invoke('POST', '/api/v2/reviews/batch/apply', body={**args, 'preview_digest': proof['digest']})
         if operation == 'review.start':
             return await self.invoke('POST', '/api/v2/reviews/start', body={**args, 'input_digest': proof['input_digest']})
+        if operation == 'classify.start':
+            return await self.invoke('POST', '/api/v2/accounts/classify/start', body={**args, 'input_digest': proof['input_digest']})
         if operation in {"research.start", "report.start", "collection.start"}:
             body = {"kind": self.operations[operation]["kind"], "params": args["params"]}
             if operation == "research.start":
@@ -301,6 +305,7 @@ def register_agent_api(app):
     """Call after the original routes are registered. No auth middleware bypass."""
     from .server import CollectParams, QueryPlanParams, ReportParams, ResearchParams
     from .review import QueueArgs, BatchArgs, AutoReviewArgs
+    from .fast_account_classification import ClassificationArgs
     access = AgentAccess(app)
     app.state.agent_access = access
     access.operations = {
@@ -327,6 +332,7 @@ def register_agent_api(app):
         'review.queue': {'scope': 'read', 'model': QueueArgs, 'path': '/api/v2/reviews/queue'},
         'review.batch': {'scope': 'review', 'model': BatchArgs},
         'review.start': {'scope': 'review', 'model': AutoReviewArgs},
+        'classify.start': {'scope': 'review', 'model': ClassificationArgs},
     }
     router = APIRouter()
 
@@ -433,8 +439,11 @@ def register_agent_api(app):
                 shape["properties"]["use_ai"] = {"type": "boolean", "const": False, "default": False}
             operations[name] = {"scope": spec["scope"], "mutates": spec["scope"] != "read",
                                 "arguments": shape}
+            if name == 'classify.start':
+                operations[name].update(description='快速批量账号类型粗分，可人工更改；仅名称、用户名和已保存公开简介。',
+                    may_read_public_network=False, identity_verification=False, manual_locked_skipped=True)
             if name in {"job.cancel", "job.retry"}:
-                operations[name]["scope_by_job"] = {"evidence_review": "review", "other_business": "run"}
+                operations[name]["scope_by_job"] = {"evidence_review": "review", "account_classification": "review", "other_business": "run"}
         return {"protocol": 1, "operations": operations,
                 "read_endpoint": "/agents/v1/read", "preview_endpoint": "/agents/v1/preview",
                 "execute_endpoint": "/agents/v1/execute", "preview_ttl_seconds": PREVIEW_TTL,

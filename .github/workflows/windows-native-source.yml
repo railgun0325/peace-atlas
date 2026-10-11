@@ -1,4 +1,4 @@
-name: Build and verify private Windows correction source
+name: Build and verify public Windows fast-classification source
 
 on:
   workflow_dispatch:
@@ -8,11 +8,11 @@ on:
         required: true
         type: string
       release_tag:
-        description: Existing private draft tag in this repository
+        description: Existing draft tag in this public repository
         required: true
         type: string
 
-# Write permission is used only for accepted candidate uploads to the existing private draft.
+# Write permission is used only for accepted candidate uploads to the existing draft in public repository.
 permissions:
   contents: write
 
@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: fb6a0460adf751952a3490f9a814a18e137ddf2749305f36109d073832b277a4
+      EXPECTED_MANIFEST_SHA256: __ROOT_APPROVED_MANIFEST_SHA256__
     steps:
       - name: Fetch the exact same-repository committed source
         env:
@@ -47,9 +47,9 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '44a7b60d3141735af4f4f565e1d4dcdd3bb7c589':
+              if source_sha != '__ROOT_APPROVED_SOURCE_SHA__':
                   raise ValueError('Only the root-approved correction source commit is supported')
-              if tag != 'v2.0.0-foundation-correction.20261011':
+              if tag != 'v2.0.0-fast-classification.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
@@ -71,8 +71,8 @@ jobs:
           def api(path):
               return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
           repository = api('repos/' + repo)
-          if repository.get('private') is not True:
-              raise SystemExit('A private repository is required')
+          if repository.get('private') is not False:
+              raise SystemExit('A public repository is required')
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != source_sha:
@@ -110,7 +110,7 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/final-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/source-manifest.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The committed quality source manifest differs from the prepared release freeze')
@@ -128,6 +128,12 @@ jobs:
                   raise SystemExit('Committed application source differs: ' + name)
           if hashlib.file_digest((checkout / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
               raise SystemExit('Committed builder differs from the source freeze')
+          tools = manifest.get('build_tool_files', {})
+          if set(tools) != {'desktop/installer.py', 'desktop/installer.nsi'}:
+              raise SystemExit('The frozen installer source closure is required')
+          for name, sha in tools.items():
+              if not re.fullmatch(r'[a-f0-9]{64}', sha) or hashlib.file_digest((checkout / name).open('rb'), 'sha256').hexdigest() != sha:
+                  raise SystemExit('Committed installer source differs from the source freeze: ' + name)
           # Keep verified source in a short owned path for Windows native DLL loading.
           owned_root = root.resolve(strict=True)
           verified_checkout = checkout.resolve(strict=True)
@@ -154,7 +160,7 @@ jobs:
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
           evidence = root / 'evidence'
-          manifest_path = source / 'docs/release-evidence/final-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/source-manifest.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The pinned source manifest changed before build')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -376,7 +382,7 @@ jobs:
               raise SystemExit('Both private offline browser modes must pass')
           if pathlib.Path(browser['python']).resolve(strict=True) != python.resolve(strict=True) or not pathlib.Path(browser['executable']).resolve(strict=True).is_relative_to((resources / 'browsers').resolve(strict=True)):
               raise SystemExit('Browser smoke used a host interpreter/browser')
-          manifest_path = source / 'docs/release-evidence/final-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/source-manifest.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('Committed manifest changed during acceptance')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -386,7 +392,7 @@ jobs:
           result = json.loads((evidence / 'build-result.json').read_text(encoding='utf-8'))
           assets = root / 'release-assets'
           assets.mkdir()
-          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-foundation-quality-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-fast-classification-20261012-native-' + os.environ['SOURCE_SHA'][:12]
                         + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           source_receipt = json.loads((evidence / 'source-receipt.json').read_text(encoding='utf-8'))
           acceptance = {**source_receipt, 'ok': True, 'native_accepted_archive': asset_name, 'native_accepted_archive_sha256': result['sha256'],
@@ -409,7 +415,7 @@ jobs:
           '@ | python -X utf8 -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload only accepted assets to the same existing private draft
+      - name: Upload only accepted assets to the same existing draft in public repository
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -427,8 +433,8 @@ jobs:
           if accepted.get('ok') is not True or accepted['source_sha'] != os.environ['SOURCE_SHA'] or accepted['release_tag'] != tag or accepted['source_manifest_sha256'] != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('Complete same-input native acceptance is required before upload')
           release = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
-          if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
-              raise SystemExit('The same private draft must still exist')
+          if api('repos/' + repo).get('private') is not False or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
+              raise SystemExit('The same draft in public repository must still exist')
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != os.environ['SOURCE_SHA']:
@@ -438,7 +444,7 @@ jobs:
           if not archive.is_relative_to(source_dist) or hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_accepted_archive_sha256']:
               raise SystemExit('The exact native-tested ZIP changed before upload')
           asset_name = accepted['native_accepted_archive']
-          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-foundation-quality-20261011-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
+          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-fast-classification-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
               raise SystemExit('Unexpected candidate asset name')
           assets = root / 'release-assets'
           sidecars = [assets / (asset_name + '.sha256'), assets / (asset_name + '.acceptance.json')]
@@ -452,11 +458,11 @@ jobs:
           upload_archive = assets / asset_name
           os.link(archive, upload_archive)
           all_assets = [upload_archive, *sidecars]
-          # No --clobber. gh uses its authenticated release-list fallback for this private draft.
+          # No --clobber. gh uses its authenticated release-list fallback for this draft in public repository.
           subprocess.run(['gh', 'release', 'upload', tag, *map(str, all_assets), '--repo', repo], check=True, timeout=1200)
           after = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
           if after.get('draft') is not True or after['id'] != accepted['draft_release_id'] or after.get('tag_name') != tag:
-              raise SystemExit('Private draft identity changed during upload')
+              raise SystemExit('Public repository draft identity changed during upload')
           uploaded = {asset['name']: asset for asset in after['assets']}
           records = []
           for path in all_assets:

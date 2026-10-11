@@ -12,7 +12,7 @@ def describe_identity(account):
     raw = (account.get('metadata') or {}).get('account_identity') or {}
     if (not isinstance(raw, dict) or not isinstance(raw.get('type'), str) or raw['type'] not in TYPES
             or type(raw.get('version')) is not int or raw['version'] != 1 or not isinstance(raw.get('basis'), str)
-            or raw['basis'] not in {'manual_review', 'registered_source_backlink', 'evidence_review', 'public_profile_statement'}):
+            or raw['basis'] not in {'manual_review', 'registered_source_backlink', 'evidence_review', 'public_profile_statement', 'fast_model_classification'}):
         raw = {}
     if not raw:
         # Additive projection for earlier, accepted curated-anchor checks. It
@@ -40,13 +40,16 @@ def describe_identity(account):
     identity = raw.get('type', 'unknown')
     fallback_scope = '尚无可核对的账号类型依据；名称、自称、蓝标和关注关系不能决定类型。'
     details = {'basis': raw.get('basis', 'insufficient_source'),
-               'classification_basis': 'public_profile_description' if raw.get('basis') == 'public_profile_statement' else 'agent_review',
+               'classification_basis': ('fast_model_classification' if raw.get('basis') == 'fast_model_classification'
+                    else 'public_profile_description' if raw.get('basis') == 'public_profile_statement' else 'agent_review'),
                'confidence_scope': raw.get('confidence_scope') if isinstance(raw.get('confidence_scope'), str) else fallback_scope,
                'evidence_urls': [url for url in raw.get('evidence_urls', []) if isinstance(url, str)] if isinstance(raw.get('evidence_urls'), list) else [],
                'manual_locked': raw.get('manual_locked') is True,
                'reviewed_at': raw.get('reviewed_at') if isinstance(raw.get('reviewed_at'), str) else '',
                'reviewed_by': raw.get('reviewed_by', 'human' if raw.get('basis') == 'manual_review' else ''),
                'note': raw.get('note') if isinstance(raw.get('note'), str) else ''}
+    if raw.get('basis') == 'fast_model_classification':
+        details['confidence'] = raw.get('confidence') if raw.get('confidence') in {'high', 'medium', 'low'} else 'low'
     return {'account_type': identity, 'account_type_details': details}
 
 
@@ -68,12 +71,14 @@ def research_registry_context(accounts):
         descriptor = describe_identity(account)
         details = descriptor['account_type_details']
         metadata = {}
-        if details['basis'] in {'manual_review', 'registered_source_backlink', 'curated_registry_backlink', 'evidence_review', 'public_profile_statement'}:
+        if details['basis'] in {'manual_review', 'registered_source_backlink', 'curated_registry_backlink', 'evidence_review', 'public_profile_statement', 'fast_model_classification'}:
             metadata['account_identity'] = {'version': 1, 'type': descriptor['account_type'],
                 'basis': 'registered_source_backlink' if details['basis'] == 'curated_registry_backlink' else details['basis'],
                 **{field: details[field] for field in ('confidence_scope', 'evidence_urls', 'manual_locked', 'reviewed_at', 'note')}}
             if details['basis'] == 'public_profile_statement':
                 metadata['account_identity']['classification_basis'] = 'public_profile_description'
+            elif details['basis'] == 'fast_model_classification':
+                metadata['account_identity'].update(classification_basis='fast_model_classification', confidence=details['confidence'])
         relevance = describe_relevance(account)['research_relevance']
         if relevance['basis'] == 'manual_review':
             raw = account['metadata']['research_relevance_override']
@@ -121,7 +126,7 @@ def correct_identity(store, account_id, *, type, manual_locked=True, note='', ev
         urls = type_evidence_urls(account, evidence_urls, evidence_basis)
         metadata = dict(account.get('metadata') or {})
         previous = metadata.get('account_identity') or {}
-        if _reviewer == 'deepseek_auto_review' and previous.get('manual_locked') is True:
+        if _reviewer != 'human' and isinstance(previous, dict) and previous.get('manual_locked') is True:
             raise ValueError('自动审核不覆盖已锁定的人工类型。')
         revision = previous.get('revision', 0) if isinstance(previous, dict) else 0
         revision = revision if isinstance(revision, int) and not isinstance(revision, bool) else 0
@@ -139,6 +144,27 @@ def correct_identity(store, account_id, *, type, manual_locked=True, note='', ev
                        (_public_json(metadata), _now(), account_id))
         if _schedule:
             schedule_account_checks(store, [account_id], _connection=connection)
+        account = _locked_account(store, connection, account_id)
+    return project_account(account)
+
+
+def set_identity_lock(store, account_id, *, manual_locked):
+    """Explicitly release/retain a type decision without relabeling its provenance."""
+    from .store import _now
+    from .research_repository import _public_json
+    if type(manual_locked) is not bool:
+        raise ValueError('人工类型锁定值无效。')
+    with store._transaction(write=True) as connection:
+        account = _locked_account(store, connection, account_id)
+        metadata = dict(account.get('metadata') or {})
+        previous = metadata.get('account_identity')
+        if not isinstance(previous, dict) or previous.get('version') != 1 or previous.get('type') not in TYPES:
+            raise ValueError('该账号尚无可调整锁定的类型决定。')
+        revision = previous.get('revision', 0)
+        revision = revision if type(revision) is int else 0
+        metadata['account_identity'] = {**previous, 'manual_locked': manual_locked, 'revision': revision + 1}
+        store._execute(connection, 'UPDATE wb_accounts SET metadata=?,updated_at=? WHERE id=?',
+                       (_public_json(metadata), _now(), account_id))
         account = _locked_account(store, connection, account_id)
     return project_account(account)
 

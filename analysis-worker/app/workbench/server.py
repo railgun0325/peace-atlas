@@ -22,6 +22,7 @@ from . import pipeline
 from .jobs import JobRunner
 from .job_retries import RetryConflict
 from .review import QueueArgs, BatchArgs, BatchApply, AutoReviewArgs, AutoReviewStart, ReviewConflict, review_queue, preview_batch as review_batch_preview, apply_batch as review_batch_apply, review_estimate, start_review
+from .fast_account_classification import ClassificationArgs, ClassificationStart, estimate_classification, start_classification
 from .store import Store
 from .backup import BackupService, BackupError
 from .limits import (
@@ -65,6 +66,11 @@ class VerificationSource(BaseModel):
     url: str = Field(max_length=2048)
     label: str = Field(default="", max_length=200)
     account_type: Literal["organization", "individual", "unknown"] = "unknown"
+
+
+class AccountTypeLockRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    manual_locked: bool = Field(strict=True)
 
 
 class VerificationSourcesRequest(BaseModel):
@@ -669,7 +675,7 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
     def export_reviews(request: Request, job_id: str):
         import json
         job = db(request).get_job(job_id)
-        if not job or job['params'].get('_evidence_review') is not True:
+        if not job or not (job['params'].get('_evidence_review') is True or job['params'].get('_account_classification') is True):
             raise LookupError('自动审核任务不存在。')
         return Response(json.dumps(job, ensure_ascii=False, indent=2), media_type='application/json',
                         headers={'Content-Disposition': f'attachment; filename="review-{job["id"]}.json"'})
@@ -685,6 +691,16 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
             raise ValueError('请先保存 AI 连接，并使用包含 DSH 运行时的完整桌面版本。')
         job = start_review(db(request), payload.model_dump(exclude={'input_digest'}), expected_digest=payload.input_digest)
         return job
+
+    @app.post('/api/v2/accounts/classify/estimate')
+    def estimate_account_classification(request: Request, payload: ClassificationArgs):
+        return estimate_classification(db(request), payload.model_dump())
+
+    @app.post('/api/v2/accounts/classify/start', status_code=201)
+    def classify_accounts(request: Request, payload: ClassificationStart):
+        if not pipeline.capabilities()['llm']['configured']:
+            raise ValueError('请先在能力与设置保存 AI 连接。')
+        return start_classification(db(request), payload.model_dump(exclude={'input_digest'}), expected_digest=payload.input_digest)
 
     @app.get("/api/v2/social")
     def social_capabilities():
@@ -835,7 +851,12 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
     @app.patch("/api/v2/accounts/{account_id}/identity")
     def account_identity(request: Request, account_id: str, payload: AccountIdentityRequest):
         from .account_identity import correct_identity
-        return correct_identity(db(request), account_id, **payload.model_dump())
+        return correct_identity(db(request), account_id, **payload.model_dump(), _schedule=False)
+
+    @app.patch('/api/v2/accounts/{account_id}/type-lock')
+    def account_type_lock(request: Request, account_id: str, payload: AccountTypeLockRequest):
+        from .account_identity import set_identity_lock
+        return set_identity_lock(db(request), account_id, **payload.model_dump())
 
     @app.put("/api/v2/accounts/{account_id}/verification-sources")
     def account_sources(request: Request, account_id: str, payload: VerificationSourcesRequest):

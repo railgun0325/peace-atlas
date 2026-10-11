@@ -73,11 +73,12 @@ export function accountTypeInfo(node = {}) {
     confidence_scope: typeof details.confidence_scope === 'string' ? details.confidence_scope : '',
     manual_locked: details.manual_locked === true, reviewed_at: details.reviewed_at || '',
     note: typeof details.note === 'string' ? details.note : '',
+    confidence: ['high', 'medium', 'low'].includes(details.confidence) ? details.confidence : '',
     evidence_urls: publicEvidenceURLs({ evidence_urls: details.evidence_urls || node.type_evidence_urls || legacyEvidence }) };
 }
 export function accountTypeBasisName(info = {}) {
   const labels = { manual_review: '人工核对', manual: '人工核对', evidence_review: 'Agent 公开证据审核', registered_source_backlink: '已登记官网的准确账号回链',
-    public_profile_statement: '公开主页自述', insufficient_source: '依据不足', unknown: '依据不足' };
+    public_profile_statement: '公开主页自述', fast_model_classification: 'DS 快速粗分 · 可手动更改', insufficient_source: '依据不足', unknown: '依据不足' };
   return Object.hasOwn(labels, info.basis) ? labels[info.basis] : info.basis ? '保存的公开类型说明' : '尚未登记可核对依据';
 }
 // Exact namespace/handle matches only; a popular or similarly named account is not a platform account.

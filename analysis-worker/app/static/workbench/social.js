@@ -44,6 +44,7 @@ export function collectParams(values, platform) {
 
 export function jobTitle(job) {
   const params = job.params || {};
+  if (params._account_classification) return 'DS 快速判定账号类型';
   if (params._evidence_review) return 'DeepSeek 自动审核与核验';
   if (params._account_verification) return '公开账号自动核验';
   if (params._news_capture) return '出版方公开原文读取';

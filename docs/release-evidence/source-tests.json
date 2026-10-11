@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "source_manifest_sha256": "0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef",
+  "recorded_at": "2026-10-11T16:46:30.076927+00:00",
+  "shipping_files": 3156,
+  "source_stable": true,
+  "fixture_model_only": true,
+  "groups": {
+    "backend": {
+      "passed": 3077,
+      "failed": 0,
+      "seconds": 442.8,
+      "exit_code": 0,
+      "sha256": "a7de03e0c1e007df592cc02f245ccfc62301c584bec6192fcbec03ad90d150b3"
+    },
+    "frontend": {
+      "passed": 202,
+      "failed": 0,
+      "seconds": 73.2279114,
+      "exit_code": 0,
+      "sha256": "d11bd58d60fd3962f832681a1fc82dc89b387c205abe47eae29f40627baeff68"
+    },
+    "desktop": {
+      "passed": 62,
+      "failed": 0,
+      "seconds": 12.1845766,
+      "exit_code": 0,
+      "sha256": "37838747aa399960cd108003190dc9b9b8b77103c03a298665400af3f4edbe15"
+    },
+    "builder": {
+      "passed": 49,
+      "failed": 0,
+      "seconds": 6.64,
+      "exit_code": 0,
+      "sha256": "6204eb24a26768aa0c58209761ecc16d92fde73948c72f6affa0803a205dd30a"
+    }
+  }
+}

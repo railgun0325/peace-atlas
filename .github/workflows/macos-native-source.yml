@@ -1,4 +1,4 @@
-name: Build and verify private macOS correction source
+name: Build and verify public macOS fast-classification source and installer
 
 on:
   workflow_dispatch:
@@ -8,11 +8,11 @@ on:
         required: true
         type: string
       release_tag:
-        description: Existing private draft release in this repository
+        description: Existing draft release in this public repository
         required: true
         type: string
 
-# Write access is used only for the explicitly requested private draft and accepted candidate assets.
+# Write access is used only for the explicitly requested draft in public repository and accepted candidate assets.
 permissions:
   contents: write
 
@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: fb6a0460adf751952a3490f9a814a18e137ddf2749305f36109d073832b277a4
+      EXPECTED_MANIFEST_SHA256: __ROOT_APPROVED_MANIFEST_SHA256__
     steps:
       - name: Fetch the exact same-repository source commit
         env:
@@ -47,9 +47,9 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '44a7b60d3141735af4f4f565e1d4dcdd3bb7c589':
+              if source_sha != '__ROOT_APPROVED_SOURCE_SHA__':
                   raise ValueError('Only the root-approved correction source commit is supported')
-              if tag != 'v2.0.0-foundation-correction.20261011':
+              if tag != 'v2.0.0-fast-classification.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
@@ -71,8 +71,8 @@ jobs:
           def api(path):
               return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
           repository = api('repos/' + repo)
-          if repository.get('private') is not True:
-              raise SystemExit('A private repository is required')
+          if repository.get('private') is not False:
+              raise SystemExit('A public repository is required')
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != source_sha:
@@ -87,14 +87,14 @@ jobs:
               else:
                   raise SystemExit('Draft lookup exceeded the bounded release list')
               if not matches:
-                  if tag != 'v2.0.0-foundation-correction.20261011':
+                  if tag != 'v2.0.0-fast-classification.20261012':
                       raise SystemExit('Only the explicitly requested correction draft may be created')
                   resolved = api('repos/' + repo + '/commits/' + source_sha)
                   if resolved.get('sha') != source_sha:
                       raise SystemExit('Draft source commit did not resolve exactly')
                   body = {'tag_name': tag,
                           'name': 'PEACE ATLAS 2.0.0 - Foundation correction and native acceptance candidate',
-                          'body': 'Private correction candidate from source ' + source_sha + '. Source regression, formal report and account/activity recheck acceptance must be recorded before this workflow is bound; native acceptance remains pending. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
+                          'body': 'Public repository draft candidate from source ' + source_sha + '. Source regression, formal report and account/activity recheck acceptance must be recorded before this workflow is bound; native acceptance remains pending. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
                           'draft': True, 'prerelease': True}
                   created = subprocess.run(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
                                             'repos/' + repo + '/releases', '--input', '-'],
@@ -133,7 +133,7 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/final-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/source-manifest.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The committed foundation source manifest differs from the prepared release freeze')
@@ -151,6 +151,12 @@ jobs:
                   raise SystemExit('Committed application source differs: ' + name)
           if hashlib.file_digest((checkout / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
               raise SystemExit('Committed builder differs from the source freeze')
+          tools = manifest.get('build_tool_files', {})
+          if set(tools) != {'desktop/installer.py', 'desktop/installer.nsi'}:
+              raise SystemExit('The frozen installer source closure is required')
+          for name, sha in tools.items():
+              if not re.fullmatch(r'[a-f0-9]{64}', sha) or hashlib.file_digest((checkout / name).open('rb'), 'sha256').hexdigest() != sha:
+                  raise SystemExit('Committed installer source differs from the source freeze: ' + name)
           receipt = {'repository': repo, 'source_sha': source_sha, 'source_tree_sha': commit['commit']['tree']['sha'],
                      'source_archive_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(),
                      'source_manifest_sha256': manifest_sha, 'application_union_count': len(manifest['files']),
@@ -176,7 +182,7 @@ jobs:
               subprocess.run([str(python), '-I', '-B', str(source / 'desktop/build.py'),
                               '--target', 'macos-arm64', '--mac-signing', 'native-finalizer'],
                              cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
-          manifest = json.loads((source / 'docs/release-evidence/final-source-manifest-20261011.json').read_text())
+          manifest = json.loads((source / 'docs/release-evidence/source-manifest.json').read_text())
           target = manifest['target_files']['macos-arm64']
           expected = {name: manifest['files'][name]['sha256'] for name in target}
           spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
@@ -247,7 +253,7 @@ jobs:
           executable = app / 'Contents/MacOS' / main_name
           if not executable.is_file() or executable.is_symlink() or not executable.stat().st_mode & stat.S_IXUSR or (app / 'Contents/MacOS/Electron').exists():
               raise SystemExit('Extracted recovery main executable is invalid')
-          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/final-source-manifest-20261011.json').read_text())
+          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/source-manifest.json').read_text())
           expected = {name: manifest['files'][name]['sha256'] for name in manifest['target_files']['macos-arm64']}
           macho_magic = {b'\xfe\xed\xfa\xce', b'\xce\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
                          b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'}
@@ -405,7 +411,7 @@ jobs:
               raise SystemExit('Native derived archive must not be represented as either raw ZIP')
           assets = root / 'release-assets'
           assets.mkdir()
-          name = ('PEACE-ATLAS-2.0.0-macos-arm64-foundation-quality-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+          name = ('PEACE-ATLAS-2.0.0-macos-arm64-fast-classification-20261012-native-' + os.environ['SOURCE_SHA'][:12]
                   + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           output = assets / name
           shutil.copy2(finalized[0], output)
@@ -432,7 +438,80 @@ jobs:
               summary.write('Derived ad-hoc ZIP SHA-256: `' + native_sha + '`. This is a newly built and natively finalized archive, not the Windows cross-built ZIP. No notarization, real-model call or formal user data was used.\n')
           PY
 
-      - name: Upload accepted native candidate to the existing private draft
+      - name: Construct the installer from the accepted native app
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
+          source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
+          evidence, assets = root / 'evidence', root / 'release-assets'
+          accepted_path = evidence / 'acceptance.json'
+          accepted = json.loads(accepted_path.read_text())
+          manifest_path = source / 'docs/release-evidence/source-manifest.json'
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+          if sha(manifest_path) != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('Pinned source manifest changed before installer construction')
+          manifest = json.loads(manifest_path.read_text())
+          if set(manifest.get('build_tool_files', {})) != {'desktop/installer.py', 'desktop/installer.nsi'}:
+              raise SystemExit('Frozen installer source closure required')
+          for name, expected in manifest['build_tool_files'].items():
+              if sha(source / name) != expected:
+                  raise SystemExit('Frozen installer source changed before construction')
+          if accepted.get('ok') is not True or accepted.get('source_sha') != os.environ['SOURCE_SHA'] or accepted.get('release_tag') != os.environ['RELEASE_TAG'] or accepted.get('source_manifest_sha256') != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('Same-source native acceptance required before installer construction')
+          required = ('native_codesign', 'finalized_zip_roundtrip_codesign_and_bytes', 'native_desktop_backend', 'native_backup_sqlite_integrity', 'native_typography', 'native_read_only_budgets', 'frozen_non_macho_application_unchanged')
+          if any(accepted.get(key) is not True for key in required):
+              raise SystemExit('All original native acceptance gates must pass before installer construction')
+          archive = assets / accepted['native_finalized_archive']
+          if archive.parent.resolve(strict=True) != assets.resolve(strict=True) or sha(archive) != accepted['native_finalized_archive_sha256']:
+              raise SystemExit('Accepted native ZIP changed before installer construction')
+          app = root / 'native-app/PEACE ATLAS.app'
+          application_manifest_sha = sha(app / 'Contents/Resources/build-manifest.json')
+          audit_path = evidence / 'installer-package-audit.json'
+          audit_path.write_text(json.dumps({'ok': True, 'target': 'macos-arm64',
+              'source_sha': os.environ['SOURCE_SHA'], 'source_manifest_sha256': sha(manifest_path),
+              'archive_sha256': sha(archive), 'application_manifest_sha256': application_manifest_sha,
+              'native_acceptance_sha256': sha(accepted_path),
+              'complete_frozen_source_before_signing': True, 'finalized_zip_roundtrip_codesign_and_bytes': True,
+              'frozen_non_macho_application_unchanged': True}, indent=2))
+          handoff_path = evidence / 'installer-input.json'
+          handoff = {'installer_input_format': 1, 'target': 'macos-arm64',
+              'source_freeze_sha256': sha(manifest_path), 'archive_sha256': sha(archive),
+              'application_manifest_sha256': application_manifest_sha,
+              'package_audit_passed': True, 'native_passed': True,
+              'native_signed_application_files': accepted['application_macho_hashes_changed_by_signing'],
+              'receipts': [{'kind': 'package_audit', 'path': audit_path.name, 'sha256': sha(audit_path)},
+                           {'kind': 'native', 'path': accepted_path.name, 'sha256': sha(accepted_path)}]}
+          handoff_path.write_text(json.dumps(handoff, indent=2))
+          pkg = assets / (archive.stem + '.pkg')
+          if pkg.exists() or pathlib.Path(str(pkg) + '.json').exists():
+              raise SystemExit('Installer output must be fresh; replacement is forbidden')
+          python = root / 'build-venv/bin/python'
+          with (evidence / 'installer-build.log').open('w') as log:
+              subprocess.run([str(python), '-I', '-B', str(source / 'desktop/installer.py'),
+                  '--target', 'macos-arm64', '--package', str(app),
+                  '--archive', str(archive), '--archive-sha', sha(archive),
+                  '--freeze', str(manifest_path), '--freeze-sha', sha(manifest_path),
+                  '--acceptance', str(handoff_path), '--acceptance-sha', sha(handoff_path),
+                  '--workspace', str(root / 'installer-stage'), '--output', str(pkg)],
+                  stdout=log, stderr=subprocess.STDOUT, check=True, timeout=1800)
+          receipt_path = pathlib.Path(str(pkg) + '.json')
+          receipt = json.loads(receipt_path.read_text())
+          if receipt.get('ok') is not True or receipt.get('target') != 'macos-arm64' or receipt.get('source_freeze_sha256') != sha(manifest_path) or receipt.get('accepted_archive_sha256') != sha(archive) or receipt.get('acceptance_sha256') != sha(handoff_path) or receipt.get('installer_sha256') != sha(pkg) or receipt.get('installer_size') != pkg.stat().st_size:
+              raise SystemExit('Installer build receipt does not bind the accepted app and complete PKG')
+          if receipt.get('installer_builder_sha256') != manifest['build_tool_files']['desktop/installer.py'] or receipt.get('nsis_template_sha256') != manifest['build_tool_files']['desktop/installer.nsi']:
+              raise SystemExit('Installer receipt differs from frozen builder sources')
+          if receipt.get('installed_or_native_launch_tested') is not False or receipt.get('automatic_launch') is not False or receipt.get('user_data_modified') is not False or receipt.get('signing') != 'unsigned installer' or receipt.get('notarization') != 'not performed':
+              raise SystemExit('Installer receipt must retain honest signing and installation boundaries')
+          pathlib.Path(str(pkg) + '.sha256').write_text(sha(pkg) + '  ' + pkg.name + '\n')
+          (evidence / 'installer-build-receipt.json').write_text(json.dumps(receipt, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Double-click macOS PKG constructed from the accepted native app: `' + pkg.name + '`. PKG SHA-256 `' + sha(pkg) + '`. The installer is unsigned; no notarization or actual PKG installation has been performed. No Gatekeeper/quarantine setting or user data was changed.\n')
+          PY
+
+      - name: Upload accepted native candidate to the existing draft in public repository
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -447,7 +526,7 @@ jobs:
           def api(path):
               return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
           accepted = json.loads((root / 'evidence/acceptance.json').read_text())
-          if accepted.get('ok') is not True or accepted['source_sha'] != os.environ['SOURCE_SHA'] or accepted['release_tag'] != tag:
+          if accepted.get('ok') is not True or accepted['source_sha'] != os.environ['SOURCE_SHA'] or accepted['release_tag'] != tag or accepted['source_manifest_sha256'] != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('Complete acceptance is required before upload')
           secure_checks = accepted.get('secure_storage_checks')
           required_secure_stages = {'finalizer_desktop', 'finalizer_post_open_desktop', 'independent_desktop'}
@@ -456,16 +535,27 @@ jobs:
           if accepted.get('native_typography') is not True or accepted.get('native_read_only_budgets') is not True:
               raise SystemExit('Independent native typography and read-only budget acceptance are required before upload')
           release = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
-          if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
-              raise SystemExit('The same private draft must still exist')
+          if api('repos/' + repo).get('private') is not False or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
+              raise SystemExit('The same draft in public repository must still exist')
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != os.environ['SOURCE_SHA']:
               raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           assets = sorted((root / 'release-assets').iterdir())
-          if len(assets) != 3 or {path.name for path in assets} != {accepted['native_finalized_archive'],
-                  accepted['native_finalized_archive'] + '.sha256', accepted['native_finalized_archive'] + '.acceptance.json'}:
+          archive_name = accepted['native_finalized_archive']
+          if not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-macos-arm64-fast-classification-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', archive_name):
+              raise SystemExit('Unexpected accepted native asset name')
+          pkg_name = pathlib.Path(archive_name).stem + '.pkg'
+          wanted = {archive_name, archive_name + '.sha256', archive_name + '.acceptance.json',
+                    pkg_name, pkg_name + '.sha256', pkg_name + '.json'}
+          if len(assets) != 6 or {path.name for path in assets} != wanted:
               raise SystemExit('Unexpected upload asset set')
+          if wanted & {asset['name'] for asset in release['assets']}:
+              raise SystemExit('Candidate asset already exists; replacement is forbidden')
+          pkg = root / 'release-assets' / pkg_name
+          installer = json.loads(pathlib.Path(str(pkg) + '.json').read_text())
+          if installer.get('ok') is not True or installer.get('source_freeze_sha256') != os.environ['EXPECTED_MANIFEST_SHA256'] or installer.get('accepted_archive_sha256') != accepted['native_finalized_archive_sha256'] or installer.get('installer_sha256') != hashlib.file_digest(pkg.open('rb'), 'sha256').hexdigest() or installer.get('installed_or_native_launch_tested') is not False:
+              raise SystemExit('Accepted installer changed or installation boundary differs before upload')
           archive = root / 'release-assets' / accepted['native_finalized_archive']
           if hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_finalized_archive_sha256']:
               raise SystemExit('Accepted native archive changed before upload')
@@ -484,8 +574,9 @@ jobs:
               raise SystemExit('Release draft changed during upload')
           (root / 'evidence/upload-receipt.json').write_text(json.dumps({'ok': True, 'repository': repo,
               'release_tag': tag, 'release_id': after['id'], 'draft': True, 'asset_names': [path.name for path in assets],
-              'native_finalized_archive_sha256': accepted['native_finalized_archive_sha256']}, indent=2))
-          print('Accepted native candidate assets uploaded to the same private draft')
+              'native_finalized_archive_sha256': accepted['native_finalized_archive_sha256'],
+              'installer': pkg_name, 'installer_sha256': installer['installer_sha256'], 'pkg_installation_tested': False}, indent=2))
+          print('Accepted native candidate assets uploaded to the same draft in public repository')
           PY
 
       - name: Preserve native acceptance evidence even on failure
@@ -518,3 +609,4 @@ jobs:
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/logs/backend.log
             ${{ runner.temp }}/peace-atlas-native-source/release-assets/*.sha256
             ${{ runner.temp }}/peace-atlas-native-source/release-assets/*.acceptance.json
+            ${{ runner.temp }}/peace-atlas-native-source/release-assets/*.pkg.json
