@@ -1,0 +1,232 @@
+name: Install and launch the accepted macOS PKG
+
+on:
+  workflow_dispatch:
+
+# This workflow consumes the accepted release assets. It does not build or publish.
+permissions:
+  contents: read
+
+concurrency:
+  group: peace-atlas-macos-installer-smoke
+  cancel-in-progress: false
+
+jobs:
+  installed-pkg-smoke:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Verify, install, and launch the fixed PKG on a fresh ARM64 runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, plistlib, shutil, struct, subprocess, traceback
+          import xml.etree.ElementTree as ET
+
+          REPO = 'railgun0325/peace-atlas'
+          SOURCE = 'fd836c6941756fd9262743309fc9fe4293a8185c'
+          TAG = 'v2.0.0-fast-classification.20261012'
+          RELEASE_ID = 409797451
+          FREEZE_SHA = '0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef'
+          MANIFEST_SHA = '5da077876311ca63b14319f10c0a325892e7ee501c275aee83bbf792cc0c77d4'
+          PKG_SHA = '6566b1e4922074ddb0b389fafcd34ec7e38509abab4d6c1f8f7f234ac9a94ba8'
+          ZIP_SHA = '3bca66bca630357b89582b12a5e25b5de90f34006dd29335e5fb9234c1291b2c'
+          NATIVE_SHA = 'bcff7d04e731992e2d7661ec940bc986bd703e7b38ee4ab8187c62f8430845a0'
+          STEM = 'PEACE-ATLAS-2.0.0-macos-arm64-fast-classification-20261012-native-fd836c694175-run38157424049-1'
+          ALLOWED_SIGNED = {
+              'harness/node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node',
+              'harness/node_modules/node-addon-require-builtin-darwin-arm64/prebuilt/darwin-arm64-napi-v9.node',
+          }
+          MACHO = {bytes.fromhex(value) for value in ('feedface', 'cefaedfe', 'feedfacf', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca')}
+          installed = pathlib.Path('/Applications/PEACE ATLAS.app')
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-installer-smoke'
+          root.mkdir(exist_ok=False)
+          evidence = root / 'evidence'
+          evidence.mkdir()
+          receipt = {
+              'ok': False, 'stage': 'preflight', 'repository': REPO, 'source_sha': SOURCE,
+              'release_tag': TAG, 'release_id': RELEASE_ID, 'source_manifest_sha256': FREEZE_SHA,
+              'pkg_sha256': PKG_SHA, 'target': 'macos-arm64', 'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'], 'workflow_sha': os.environ['GITHUB_SHA'],
+              'installed_app_path': str(installed), 'actual_install_completed': False,
+              'installer_signature': 'unsigned', 'application_signature': 'native ad-hoc',
+              'notarization': 'not performed', 'quarantine_or_gatekeeper_changes': False,
+              'formal_user_profile_accessed': False, 'optional_network_or_paid_smokes_requested': False,
+          }
+          def save(stage):
+              receipt['stage'] = stage
+              (evidence / 'installer-install-acceptance.json').write_text(json.dumps(receipt, indent=2), encoding='utf-8')
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+          def sha(path):
+              with path.open('rb') as stream:
+                  return hashlib.file_digest(stream, 'sha256').hexdigest()
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
+          def logged(command, name, timeout=180, environment=None, must_succeed=True):
+              with (evidence / name).open('wb') as output:
+                  result = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=timeout, env=environment)
+              if must_succeed:
+                  require(result.returncode == 0, name + ' failed with exit ' + str(result.returncode))
+              return result.returncode
+          def download(asset_id, name, expected_sha, size, assets):
+              row = next((item for item in assets if item['id'] == asset_id), None)
+              require(row is not None and row['name'] == name and row['size'] == size
+                      and row.get('digest') == 'sha256:' + expected_sha, 'Release asset metadata mismatch: ' + name)
+              destination = root / name
+              with destination.open('wb') as output:
+                  subprocess.run(['gh', 'api', '--hostname', 'github.com', '-H', 'Accept: application/octet-stream',
+                                  'repos/' + REPO + '/releases/assets/' + str(asset_id)], stdout=output, check=True, timeout=600)
+              require(destination.stat().st_size == size and sha(destination) == expected_sha, 'Downloaded asset mismatch: ' + name)
+              return destination
+          def application_hashes(app, freeze, expected_hashes=None):
+              resources = app / 'Contents/Resources'
+              manifest_file = resources / 'build-manifest.json'
+              require(sha(manifest_file) == MANIFEST_SHA, 'Installed/payload build-manifest digest mismatch')
+              manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
+              require(manifest.get('product') == 'PEACE ATLAS' and manifest.get('version') == '2.0.0'
+                      and manifest.get('target') == 'macos-arm64', 'Unexpected application manifest identity')
+              frozen = {name: freeze['files'][name]['sha256'] for name in freeze['target_files']['macos-arm64']}
+              rows = manifest['application_files']
+              described = {row['path']: row['sha256'] for row in rows}
+              require(len(rows) == len(described) and described == frozen, 'Manifest source members differ from pinned freeze')
+              actual, changed = {}, set()
+              for name, original_sha in frozen.items():
+                  relative = pathlib.PurePosixPath(name)
+                  require(not relative.is_absolute() and '..' not in relative.parts, 'Unsafe manifest member')
+                  member = resources.joinpath(*relative.parts)
+                  require(member.is_file() and not member.is_symlink() and member.resolve().is_relative_to(resources.resolve()), 'Missing/unsafe source member: ' + name)
+                  actual[name] = sha(member)
+                  if actual[name] != original_sha:
+                      changed.add(name)
+                      with member.open('rb') as stream:
+                          require(name in ALLOWED_SIGNED and stream.read(4) in MACHO, 'Unaccepted frozen member change: ' + name)
+              require(changed == ALLOWED_SIGNED, 'Native signing allowance must match exactly')
+              if expected_hashes is not None:
+                  require(actual == expected_hashes, 'Installed application bytes differ from accepted PKG payload')
+              return actual
+
+          try:
+              save('preflight')
+              require(os.environ['GITHUB_REPOSITORY'] == REPO, 'Only the authorized repository is supported')
+              require(platform.system() == 'Darwin' and platform.machine() == 'arm64', 'Native Apple Silicon runner required')
+              version = subprocess.check_output(['/usr/bin/sw_vers', '-productVersion'], text=True).strip()
+              require(version.split('.')[0] == '15', 'macOS 15 runner required')
+              receipt.update(runner_os=version, runner_arch=platform.machine())
+              require(not installed.exists() and not installed.is_symlink(), 'Installed app must be absent on the fresh runner')
+              require(api('repos/' + REPO).get('private') is False, 'Public repository required')
+              reference = api('repos/' + REPO + '/git/ref/tags/' + TAG)
+              require(reference.get('ref') == 'refs/tags/' + TAG and reference.get('object') == {'sha': SOURCE, 'type': 'commit', 'url': 'https://api.github.com/repos/' + REPO + '/git/commits/' + SOURCE}, 'Fixed source tag mismatch')
+              release = api('repos/' + REPO + '/releases/' + str(RELEASE_ID))
+              require(release.get('id') == RELEASE_ID and release.get('tag_name') == TAG and release.get('prerelease') is False, 'Accepted release identity mismatch')
+              receipt['release_was_draft'] = release.get('draft')
+              assets = release['assets']
+              save('download-fixed-inputs')
+              pkg = download(631287968, STEM + '.pkg', PKG_SHA, 377088196, assets)
+              native_file = download(631287975, STEM + '.zip.acceptance.json', NATIVE_SHA, 3862, assets)
+              builder_file = download(631287969, STEM + '.pkg.json', '3266eceb8fc11b44e273c6fab4def2ec12871758417b39042098adafc13cbbd9', 814, assets)
+              freeze_file = root / 'source-manifest.json'
+              with freeze_file.open('wb') as output:
+                  subprocess.run(['gh', 'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json',
+                                  'repos/' + REPO + '/contents/docs/release-evidence/source-manifest.json?ref=' + SOURCE], stdout=output, check=True, timeout=120)
+              require(sha(freeze_file) == FREEZE_SHA, 'Pinned source manifest mismatch')
+              freeze = json.loads(freeze_file.read_text(encoding='utf-8'))
+              native = json.loads(native_file.read_text(encoding='utf-8'))
+              builder = json.loads(builder_file.read_text(encoding='utf-8'))
+              require(native.get('ok') is True and native.get('source_sha') == SOURCE and native.get('release_tag') == TAG
+                      and native.get('source_manifest_sha256') == FREEZE_SHA and native.get('native_codesign') is True
+                      and native.get('frozen_non_macho_application_unchanged') is True
+                      and native.get('native_finalized_archive_sha256') == ZIP_SHA
+                      and set(native.get('application_macho_hashes_changed_by_signing', [])) == ALLOWED_SIGNED, 'Pinned native allowance mismatch')
+              require(builder.get('ok') is True and builder.get('target') == 'macos-arm64'
+                      and builder.get('source_freeze_sha256') == FREEZE_SHA and builder.get('installer_sha256') == PKG_SHA
+                      and builder.get('accepted_archive_sha256') == ZIP_SHA
+                      and builder.get('installed_or_native_launch_tested') is False, 'Pinned construction receipt mismatch')
+              receipt.update(native_acceptance_sha256=NATIVE_SHA, pinned_pkg_construction_verified=True,
+                             native_signed_application_files=sorted(ALLOWED_SIGNED))
+              save('validate-native-pkg')
+              receipt['pkg_signature_diagnostic_exit_code'] = logged(['/usr/sbin/pkgutil', '--check-signature', str(pkg)], 'pkg-signature.log', must_succeed=False)
+              expanded = root / 'expanded'
+              logged(['/usr/sbin/pkgutil', '--expand-full', str(pkg), str(expanded)], 'pkg-expand.log', timeout=300)
+              distribution = ET.parse(expanded / 'Distribution').getroot()
+              domains = distribution.find('domains')
+              require(domains is not None and domains.get('enable_currentUserHome') == 'false' and domains.get('enable_localSystem') == 'true', 'Unexpected installer domains')
+              component = expanded / 'component.pkg'
+              package_info = ET.parse(component / 'PackageInfo').getroot()
+              require(package_info.get('identifier') == 'org.peaceatlas.workbench' and package_info.get('version') == '2.0.0'
+                      and package_info.get('install-location') == '/Applications', 'Unexpected native package identity/location')
+              payload = component / 'Payload/PEACE ATLAS.app'
+              payload_hashes = application_hashes(payload, freeze)
+              logged(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(payload)], 'payload-codesign.log')
+              receipt['native_pkg_structure_verified'] = True
+              save('actual-install')
+              require(not installed.exists() and not installed.is_symlink(), 'Fresh install precondition changed')
+              logged(['sudo', '/usr/sbin/installer', '-pkg', str(pkg), '-target', '/'], 'installer.log', timeout=300)
+              receipt['actual_install_completed'] = True
+              save('verify-installed-app')
+              require(installed.is_dir() and not installed.is_symlink(), 'Expected installed app missing')
+              info = plistlib.loads((installed / 'Contents/Info.plist').read_bytes())
+              require(info.get('CFBundleIdentifier') == 'org.peaceatlas.workbench' and info.get('CFBundleExecutable') == 'PEACE ATLAS', 'Installed application identity mismatch')
+              executable = installed / 'Contents/MacOS/PEACE ATLAS'
+              require(executable.is_file() and not executable.is_symlink() and os.access(executable, os.X_OK), 'Installed entry point is not executable')
+              installed_hashes = application_hashes(installed, freeze, payload_hashes)
+              logged(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(installed)], 'installed-codesign.log')
+              receipt.update(installed_identity_verified=True, installed_main_executable='PEACE ATLAS',
+                             installed_manifest_sha256=MANIFEST_SHA, installed_application_files_verified=len(installed_hashes),
+                             installed_bytes_match_pkg_payload=True, installed_codesign_verified=True)
+              save('installed-isolated-launch')
+              profile, temporary = root / 'isolated-profile', root / 'native-tmp'
+              profile.mkdir()
+              temporary.mkdir()
+              native_home = os.environ.get('HOME', '')
+              require(pathlib.Path(native_home).is_absolute(), 'Native fresh runner HOME required')
+              environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if key in os.environ}
+              environment.update(HOME=native_home, TMPDIR=str(temporary) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
+                                 WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SOCIAL_DIR=str(profile / 'social'))
+              receipt.update(native_home_preserved=True, native_home_contents_accessed=False, isolated_data_dir=True,
+                             isolated_social_dir=True, owned_tmpdir=True)
+              receipt['installed_app_exit_code'] = logged([str(executable)], 'installed-launch.log', timeout=240, environment=environment)
+              require(not (profile / 'desktop-smoke-error.json').exists(), 'Installed smoke emitted an error receipt')
+              desktop = json.loads((profile / 'desktop-smoke.json').read_text(encoding='utf-8'))
+              require(desktop.get('version') == '2.0.0' and desktop.get('health', {}).get('ok') is True
+                      and desktop.get('health', {}).get('status') == 'ready', 'Installed backend health failed')
+              require(desktop.get('checks') == {'secure_storage': True}, 'Minimal native secure storage smoke failed or scope expanded')
+              screenshot = profile / 'desktop-smoke.png'
+              with screenshot.open('rb') as stream:
+                  header = stream.read(24)
+              require(len(header) == 24 and header[:8] == b'\x89PNG\r\n\x1a\n' and header[12:16] == b'IHDR', 'Installed startup screenshot is not a PNG')
+              width, height = struct.unpack('>II', header[16:24])
+              require(width > 0 and height > 0, 'Installed startup screenshot has no dimensions')
+              shutil.copyfile(screenshot, evidence / 'installed-startup.png')
+              shutil.copyfile(profile / 'desktop-smoke.json', evidence / 'installed-desktop-smoke.json')
+              logged(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(installed)], 'installed-codesign-after-smoke.log')
+              receipt.update(health_ok=True, secure_storage=True, desktop_receipt_present=True, screenshot_present=True,
+                             startup_screenshot={'name': 'installed-startup.png', 'width': width, 'height': height, 'sha256': sha(screenshot)},
+                             installed_codesign_after_smoke=True, ok=True)
+              save('complete')
+              print(json.dumps({'ok': True, 'actual_install_completed': True, 'health_ok': True, 'secure_storage': True}))
+          except Exception as error:
+              receipt['error'] = str(error)
+              save(receipt['stage'])
+              (evidence / 'failure.log').write_text(traceback.format_exc(), encoding='utf-8')
+              raise
+          finally:
+              # Only explicitly selected smoke output is exported; profile DB, connection files and HOME are excluded.
+              profile = root / 'isolated-profile'
+              for relative in ('logs/desktop.log', 'logs/backend.log', 'desktop-smoke-error.json'):
+                  source = profile / relative
+                  if source.is_file():
+                      shutil.copyfile(source, evidence / ('installed-' + source.name))
+          PY
+
+      - name: Preserve this installation receipt, startup screenshot, and failure logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-installer-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/peace-atlas-installer-smoke/evidence/
+          if-no-files-found: error
+          retention-days: 14
