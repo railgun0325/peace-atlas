@@ -1,10 +1,10 @@
-name: Build and verify private Windows quality source
+name: Build and verify private Windows correction source
 
 on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: Full 40-character source commit containing the pinned quality manifest
+        description: Full 40-character source commit containing the pinned correction manifest
         required: true
         type: string
       release_tag:
@@ -32,8 +32,8 @@ jobs:
       SOURCE_SHA: ${{ inputs.source_sha }}
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
-      # Root-approved public quality source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: 99192b5a559e39876f48f9051c678b6bd6791c034f272c2bfe449cda5015e7e7
+      # Root-approved public correction source-manifest digest; source commit remains a required input.
+      EXPECTED_MANIFEST_SHA256: fb6a0460adf751952a3490f9a814a18e137ddf2749305f36109d073832b277a4
     steps:
       - name: Fetch the exact same-repository committed source
         env:
@@ -47,10 +47,10 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '51c1a1523918af92fce5d340e21d30729630ab6c':
-                  raise ValueError('Only the root-approved quality source commit is supported')
-              if tag != 'v2.0.0-foundation-quality.20261011':
-                  raise ValueError('Only the root-approved quality release tag is supported')
+              if source_sha != '44a7b60d3141735af4f4f565e1d4dcdd3bb7c589':
+                  raise ValueError('Only the root-approved correction source commit is supported')
+              if tag != 'v2.0.0-foundation-correction.20261011':
+                  raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
               return source_sha, tag
@@ -59,7 +59,7 @@ jobs:
           source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
                                          os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
           if not re.fullmatch(r'[a-f0-9]{64}', os.environ['EXPECTED_MANIFEST_SHA256']):
-              raise SystemExit('Quality workflow awaits the new root-approved manifest SHA-256')
+              raise SystemExit('Correction workflow awaits the new root-approved manifest SHA-256')
           if platform.system() != 'Windows' or platform.machine().lower() not in ('amd64', 'x86_64'):
               raise SystemExit('Native Windows x64 runner required')
           if sys.version_info < (3, 12):
@@ -76,7 +76,7 @@ jobs:
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != source_sha:
-              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
+              raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           def find_draft_release(repo, tag):
               matches = []
               for page in range(1, 21):
@@ -110,7 +110,7 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/quality-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/final-source-manifest-20261011.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The committed quality source manifest differs from the prepared release freeze')
@@ -154,7 +154,7 @@ jobs:
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pa-win'
           source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
           evidence = root / 'evidence'
-          manifest_path = source / 'docs/release-evidence/quality-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/final-source-manifest-20261011.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The pinned source manifest changed before build')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -376,7 +376,7 @@ jobs:
               raise SystemExit('Both private offline browser modes must pass')
           if pathlib.Path(browser['python']).resolve(strict=True) != python.resolve(strict=True) or not pathlib.Path(browser['executable']).resolve(strict=True).is_relative_to((resources / 'browsers').resolve(strict=True)):
               raise SystemExit('Browser smoke used a host interpreter/browser')
-          manifest_path = source / 'docs/release-evidence/quality-source-manifest-20261011.json'
+          manifest_path = source / 'docs/release-evidence/final-source-manifest-20261011.json'
           if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('Committed manifest changed during acceptance')
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -432,7 +432,7 @@ jobs:
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != os.environ['SOURCE_SHA']:
-              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
+              raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           archive = pathlib.Path(os.environ['RAW_ARCHIVE']).resolve(strict=True)
           source_dist = (pathlib.Path(os.environ['SOURCE_DIR']) / 'dist').resolve(strict=True)
           if not archive.is_relative_to(source_dist) or hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_accepted_archive_sha256']:

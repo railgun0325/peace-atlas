@@ -1,4 +1,4 @@
-name: Build and verify private macOS quality source
+name: Build and verify private macOS correction source
 
 on:
   workflow_dispatch:
@@ -32,8 +32,8 @@ jobs:
       SOURCE_SHA: ${{ inputs.source_sha }}
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
-      # Root-approved public quality source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: 99192b5a559e39876f48f9051c678b6bd6791c034f272c2bfe449cda5015e7e7
+      # Root-approved public correction source-manifest digest; source commit remains a required input.
+      EXPECTED_MANIFEST_SHA256: fb6a0460adf751952a3490f9a814a18e137ddf2749305f36109d073832b277a4
     steps:
       - name: Fetch the exact same-repository source commit
         env:
@@ -47,10 +47,10 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '51c1a1523918af92fce5d340e21d30729630ab6c':
-                  raise ValueError('Only the root-approved quality source commit is supported')
-              if tag != 'v2.0.0-foundation-quality.20261011':
-                  raise ValueError('Only the root-approved quality release tag is supported')
+              if source_sha != '44a7b60d3141735af4f4f565e1d4dcdd3bb7c589':
+                  raise ValueError('Only the root-approved correction source commit is supported')
+              if tag != 'v2.0.0-foundation-correction.20261011':
+                  raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
               return source_sha, tag
@@ -59,7 +59,7 @@ jobs:
           source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
                                          os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
           if not re.fullmatch(r'[a-f0-9]{64}', os.environ['EXPECTED_MANIFEST_SHA256']):
-              raise SystemExit('Quality workflow awaits the new root-approved manifest SHA-256')
+              raise SystemExit('Correction workflow awaits the new root-approved manifest SHA-256')
           if platform.system() != 'Darwin' or platform.machine() != 'arm64':
               raise SystemExit('Native Apple Silicon runner required')
           if sys.version_info < (3, 12):
@@ -76,7 +76,7 @@ jobs:
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != source_sha:
-              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
+              raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           def find_draft_release(repo, tag):
               matches = []
               for page in range(1, 21):
@@ -87,14 +87,14 @@ jobs:
               else:
                   raise SystemExit('Draft lookup exceeded the bounded release list')
               if not matches:
-                  if tag != 'v2.0.0-foundation-quality.20261011':
-                      raise SystemExit('Only the explicitly requested quality draft may be created')
+                  if tag != 'v2.0.0-foundation-correction.20261011':
+                      raise SystemExit('Only the explicitly requested correction draft may be created')
                   resolved = api('repos/' + repo + '/commits/' + source_sha)
                   if resolved.get('sha') != source_sha:
                       raise SystemExit('Draft source commit did not resolve exactly')
                   body = {'tag_name': tag,
-                          'name': 'PEACE ATLAS 2.0.0 - Foundation quality and native acceptance candidate',
-                          'body': 'Private quality candidate from source ' + source_sha + '. Full regression has passed; native platform and new real-model report acceptance are pending. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
+                          'name': 'PEACE ATLAS 2.0.0 - Foundation correction and native acceptance candidate',
+                          'body': 'Private correction candidate from source ' + source_sha + '. Source regression, formal report and account/activity recheck acceptance must be recorded before this workflow is bound; native acceptance remains pending. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
                           'draft': True, 'prerelease': True}
                   created = subprocess.run(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
                                             'repos/' + repo + '/releases', '--input', '-'],
@@ -107,7 +107,7 @@ jobs:
                       print(json.dumps({'release_create_failed': True, 'exit_code': created.returncode,
                                         'message': detail.get('message'), 'status': detail.get('status'),
                                         'documentation_url': detail.get('documentation_url')}))
-                      raise SystemExit('GitHub rejected the quality draft creation; no build or upload attempted')
+                      raise SystemExit('GitHub rejected the correction draft creation; no build or upload attempted')
                   matches = [json.loads(created.stdout)]
               if len(matches) != 1 or matches[0].get('draft') is not True:
                   raise SystemExit('Exactly one existing draft with the selected tag is required')
@@ -133,7 +133,7 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/quality-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/final-source-manifest-20261011.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The committed foundation source manifest differs from the prepared release freeze')
@@ -176,7 +176,7 @@ jobs:
               subprocess.run([str(python), '-I', '-B', str(source / 'desktop/build.py'),
                               '--target', 'macos-arm64', '--mac-signing', 'native-finalizer'],
                              cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
-          manifest = json.loads((source / 'docs/release-evidence/quality-source-manifest-20261011.json').read_text())
+          manifest = json.loads((source / 'docs/release-evidence/final-source-manifest-20261011.json').read_text())
           target = manifest['target_files']['macos-arm64']
           expected = {name: manifest['files'][name]['sha256'] for name in target}
           spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
@@ -247,7 +247,7 @@ jobs:
           executable = app / 'Contents/MacOS' / main_name
           if not executable.is_file() or executable.is_symlink() or not executable.stat().st_mode & stat.S_IXUSR or (app / 'Contents/MacOS/Electron').exists():
               raise SystemExit('Extracted recovery main executable is invalid')
-          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/quality-source-manifest-20261011.json').read_text())
+          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/final-source-manifest-20261011.json').read_text())
           expected = {name: manifest['files'][name]['sha256'] for name in manifest['target_files']['macos-arm64']}
           macho_magic = {b'\xfe\xed\xfa\xce', b'\xce\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
                          b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'}
@@ -461,7 +461,7 @@ jobs:
           tag_reference = api('repos/' + repo + '/git/ref/tags/' + tag)
           tag_commit = tag_reference.get('object')
           if tag_reference.get('ref') != 'refs/tags/' + tag or not isinstance(tag_commit, dict) or tag_commit.get('type') != 'commit' or tag_commit.get('sha') != os.environ['SOURCE_SHA']:
-              raise SystemExit('The existing fixed release tag must point directly to the exact quality source commit')
+              raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           assets = sorted((root / 'release-assets').iterdir())
           if len(assets) != 3 or {path.name for path in assets} != {accepted['native_finalized_archive'],
                   accepted['native_finalized_archive'] + '.sha256', accepted['native_finalized_archive'] + '.acceptance.json'}:
