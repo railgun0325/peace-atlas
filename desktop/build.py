@@ -39,7 +39,7 @@ PYTHON_RELEASE = "20261003"
 PLAYWRIGHT_VERSION = "1.59.0"
 CHROMIUM_REVISION = "1217"
 CHROMIUM_VERSION = "147.0.7727.15"
-ARTIFACT_SUFFIX = "-foundation-recovery-20261011"
+ARTIFACT_SUFFIX = "-foundation-quality-20261011"
 MAC_MAIN_EXECUTABLE = "PEACE ATLAS"
 CHROMIUM_TARGETS = {
     "windows-x64": "win64", "macos-arm64": "mac-arm64", "macos-x64": "mac-x64",

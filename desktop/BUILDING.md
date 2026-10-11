@@ -98,20 +98,24 @@ SHA-256 list.
 
 ## Output and verification boundaries
 
-The current `-foundation-recovery-20261011` candidate corrects the macOS main
+The fixed `-foundation-recovery-20261011` candidate corrected the macOS main
 executable name after native CI reproduced a startup failure in the previous
 foundation-reuse package. The old `Electron` basename made Electron 44.5.1 treat
 the application as an unpackaged development app and select the host Python
 instead of the bundled backend. The corrected candidate still requires a new
 source freeze, build and native acceptance; earlier archive or signing success
-does not establish startup success for it.
+does not establish startup success for it. The current `-foundation-quality-20261011`
+candidate retains that repair and adds the narrowly scoped report username
+normalization and evidence-note reuse fixes. Its independent acceptance is recorded
+in [the quality release record](../docs/RELEASE_QUALITY_20261011.md); no old test or
+package receipt establishes success for the new source.
 
 Outputs are in `dist/`:
 
-- `PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011.zip` and a timestamped portable directory.
-- `PEACE-ATLAS-2.0.0-macos-arm64-foundation-recovery-20261011.zip`, containing `PEACE ATLAS.app`.
+- `PEACE-ATLAS-2.0.0-windows-x64-foundation-quality-20261011.zip` and a timestamped portable directory.
+- `PEACE-ATLAS-2.0.0-macos-arm64-foundation-quality-20261011.zip`, containing `PEACE ATLAS.app`.
 - Per-target JSON files with exact paths, SHA-256 hashes, and structural checks.
-- `desktop-build-results-foundation-recovery-20261011.json`, recording the most recent completed invocation.
+- `desktop-build-results-foundation-quality-20261011.json`, recording the most recent completed invocation.
 
 No Intel Mac package is produced by the current default or `--target all`.
 Existing social candidates remain historical records; do not replace current
@@ -152,7 +156,7 @@ the Playwright Node driver and Chromium's nested executables),
 then nested bundles, then the outer app, preserving each executable's existing
 entitlements. It verifies with `codesign --verify --deep --strict`, performs an
 real desktop/backend smoke in a temporary data directory, and creates
-a separate `-foundation-recovery-20261011-adhoc.zip` with its SHA-256. The
+a separate `-foundation-quality-20261011-adhoc.zip` with its SHA-256. The
 finalizer reads and validates `CFBundleExecutable` before signing or launching
 the app; it uses the renamed binary without overriding `app.isPackaged`.
 Its audit directory contains the signing

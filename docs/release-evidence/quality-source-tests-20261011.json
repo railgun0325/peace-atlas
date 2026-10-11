@@ -1,0 +1,50 @@
+{
+  "recorded_at": "2026-10-11T07:18:31.504870+00:00",
+  "ok": true,
+  "source_freeze_sha256": "29f708de52ac1f0b7ad2fab64a8a81a7342e3f50368be51ec741486994ebf9a6",
+  "shipping_files": 3153,
+  "public_manifest_sha256": "99192b5a559e39876f48f9051c678b6bd6791c034f272c2bfe449cda5015e7e7",
+  "tests": {
+    "backend": {
+      "ok": true,
+      "passed": 2822,
+      "failed": 0,
+      "seconds": 481.96,
+      "sha256": "296e0ed56722bc0cf9604935d30f25db50be30ad3b02bf3eac1a1e07697082cb",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "frontend": {
+      "ok": true,
+      "passed": 198,
+      "failed": 0,
+      "seconds": 78.8372151,
+      "sha256": "c14cdb16cafdd3d72aa9742d162c2a08dad8f78d26a471f6547d532454856b19",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "desktop": {
+      "ok": true,
+      "passed": 62,
+      "failed": 0,
+      "seconds": 15.9705134,
+      "sha256": "7a1b714c9f9e298b5df1fdd33b08ee8b2de0bdf1551c19e8967c746c3ffe9ece",
+      "exit_code": 0,
+      "fixture_model_only": true
+    },
+    "builder": {
+      "ok": true,
+      "passed": 25,
+      "failed": 0,
+      "seconds": 7.22,
+      "sha256": "2699193384b1a79ac440baec0d48f27c72085243723efa5495058d50d07c4286",
+      "exit_code": 0,
+      "fixture_model_only": true
+    }
+  },
+  "passed": 3107,
+  "failed": 0,
+  "fixture_model_only": true,
+  "new_platform_package_acceptance": "pending",
+  "new_real_model_report_acceptance": "pending"
+}

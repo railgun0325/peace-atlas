@@ -2,16 +2,16 @@
 
 日本和平与反战运动公开信息研究工作台。把新闻、社媒正文、来源账号、可核对关系、活动线索与研究报告保存在本机；每项结论保留原文出处和生成时的证据快照，方便回查、续研和导出。
 
-当前源码为 **PEACE ATLAS 2.0.0 · 2026-10-11 报告续跑与跨平台启动修复候选**，发布标签为 `v2.0.0-foundation-recovery.20261011`。本批正在完成合并后的完整回归、原生构建与真实模型续跑。上传、正式升级及平台验收状态以[本轮发布记录](docs/RELEASE_RECOVERY_20261011.md)为准；草稿或源码提交不代表安装包已经验收或发布。
+当前源码为 **PEACE ATLAS 2.0.0 · 2026-10-11 报告质量修复候选**，计划私有标签 `v2.0.0-foundation-quality.20261011`。固定旧标签 `v2.0.0-foundation-recovery.20261011` 对应 `32d6e9c`：该版完整回归、本机与云端 Windows 安装包验收、正式数据升级及真实模型的 601 条材料报告运行已通过。随后独立内容复核发现账号大小写归一和解释排序的问题，当前新增修复已通过 328 项相关回归及 3,107 项整体回归，源码已冻结并开始重新打包；Mac 原生启动收尾仍在定位。最终状态以[本轮发布记录](docs/RELEASE_QUALITY_20261011.md)为准；草稿、旧版通过记录或源码提交不代表当前版本已经发布。
 
 ## 下载与开始使用
 
-[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮候选 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-foundation-recovery.20261011)
+[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮候选 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-foundation-quality.20261011)
 
 | 系统 | 资产与启动方式 | 当前验收状态 |
 | --- | --- | --- |
-| Windows x64 | 发布后从本轮 Release 下载 `windows-x64` ZIP，完整解压后双击 `PEACE ATLAS.exe`。包内自带 Python、Electron、Chromium 和固定 DSH 运行时。 | 等待本批最终构建与原生验收。 |
-| Apple Silicon macOS 13+ | 发布后从本轮 Release 下载 `macos-arm64` ZIP；精确文件名和 SHA256 随资产提供。 | 旧包已发现主程序名称错误，本批修复后将重新执行 Mac 原生验收；未进行 Apple Developer ID 签名与公证。 |
+| Windows x64 | 发布后从本轮 Release 下载 `windows-x64` ZIP，完整解压后双击 `PEACE ATLAS.exe`。包内自带 Python、Electron、Chromium 和固定 DSH 运行时。 | 旧 recovery 的本机 `054251` 包和云端原生验收通过；当前质量修复版须重新完成包内容、原生启动、Agent/SDK 和正式升级验收。 |
+| Apple Silicon macOS 13+ | 发布后从本轮 Release 下载 `macos-arm64` ZIP；精确文件名和 SHA256 随资产提供。 | 主程序名称修复后已通过冻结载荷、签名完整性和后端启动检查；桌面原生收尾超时，尚未完成平台验收。未进行 Apple Developer ID 签名与公证。 |
 
 仓库和 Release 为私有。接收者需要使用受邀并获仓库访问权限的 GitHub 账号；链接或二维码只负责打开页面，不授予访问权限。分享前由仓库所有者明确授权访问。旧自动审核修复版保留独立的[标签与记录](docs/RELEASE_20261011.md)，不替换旧包内容。下载前检查本轮 Release 是否已发布并包含相应完整资产。
 
@@ -28,7 +28,7 @@
 
 本版已接入官方 **DeepSeek Harness SDK/runtime 0.2.0-rc.2** 的实际工具调用循环。模型通过 API 发出请求，DSH 运行时根据任务调用受约束的证据工具，工具结果再进入后续模型决策、来源复核和保存流程。桌面包使用自身 Electron 的 Node 运行时，用户无需另行启动 DSH 桌面应用。模型名称以用户保存的连接及提供方实际支持为准，默认建议为 `deepseek-flash`。
 
-进度与 Mac 打包修复的第一轮完整回归 **3,053 项通过**；随后加入了真实长报告暴露的复核请求无损去重补丁，合并版本正在重新验收。最终源码测试、打包接口、原生启动、正式升级和付费模型结果按实际执行写入[本轮发布记录](docs/RELEASE_RECOVERY_20261011.md)。上一版真实 DeepSeek 批量审核的结果保留在[审核修复版记录](docs/RELEASE_20261011.md)；模拟回归不能代替真实模型研究质量。
+当前冻结源码完整回归 **3,107 项通过，0 失败**：后端 2,822、前端 198、桌面 62、打包器 25。报告质量修复、来源复用及真实长报告的复核请求无损去重补丁均在该源码中；[测试证据](docs/release-evidence/quality-source-tests-20261011.json)保留对应源码与日志摘要。打包接口、原生启动、正式升级和付费模型结果按实际执行写入[本轮发布记录](docs/RELEASE_QUALITY_20261011.md)。上一版真实 DeepSeek 批量审核的结果保留在[审核修复版记录](docs/RELEASE_20261011.md)；模拟回归不能代替真实模型研究质量。
 
 ## 操作说明与项目判断
 

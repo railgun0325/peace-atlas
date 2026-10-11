@@ -55,7 +55,7 @@ DeepSeek 按实际模型请求计费，关闭公开网页不会关闭模型调�
 | `review.batch` | 外部 Agent 自行调查后批量提交有依据的决定。先 preview，再按同一预览 execute。最多 500 项一个原子提交；更大的集合继续分批，不是总量停止。 |
 | `review.start` | 按与页面相同的参数预估并启动 DeepSeek/DSH 自动审核，包含独立公开回链核验。 |
 | `job.get` | 查询实际进度、已提交结论和核验诊断。 |
-| `job.cancel` / `job.retry` | 在 `run` 授权范围内取消或重试。仅有 review 授权时可从软件任务中心操作。 |
+| `job.cancel` / `job.retry` | 自动审核任务按 `review` 授权取消或重试，普通业务任务按 `run` 授权；每次预览和执行重新核对任务类别。登录与会话任务不可操作。 |
 
 使用随包 Skill/CLI 的 manifest 和 schema 读取当前契约。写入操作继续遵循预览、授权确认和稳定操作键；重发同一请求应保留同一键。CLI 无需 AI Key，review.start 的实际模型请求由应用已有配置发起并按实际调用计费。review.batch 提交本身不调用应用模型；外部 Agent 前置调查的费用取决于其宿主。完整 JSON 导出包含公开原始快照、工具证据、逐条决定与回链诊断，供复查。
 

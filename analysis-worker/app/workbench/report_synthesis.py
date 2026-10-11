@@ -335,6 +335,9 @@ async def fit_report_input(data, system, *, max_output_tokens=32768, capacity=No
     # exact old-checkpoint migration; never infer an old cache's provenance.
     evidence_data = {key: value for key, value in data.items() if key not in
         {"candidate_report", "revision_request", "deterministic_review_advisories"}}
+    if "report_inventory" in evidence_data:
+        from .report_quality import evidence_note_inventory
+        evidence_data["report_inventory"] = evidence_note_inventory(evidence_data["report_inventory"])
     evidence_digest = _fingerprint({"data": evidence_data, "protocol": 1,
         "batch_scope_policy": "local_source_roles_v1", "compression_prompt": _COMPRESS_PROMPT,
         "compression_review_prompt": COMPRESSION_REVIEW_PROMPT,

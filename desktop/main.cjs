@@ -649,7 +649,20 @@ async function showWindow() {
   if (process.env.WORKBENCH_SMOKE_EXIT === '1') {
     const checks = {};
     const probe = crypto.randomBytes(16).toString('hex');
-    checks.secure_storage = safeStorage.isEncryptionAvailable() && safeStorage.decryptString(safeStorage.encryptString(probe)) === probe;
+    // Fixed phase names locate a native acceptance stall without sampling
+    // process memory or logging the synthetic probe, ciphertext or settings.
+    log('Release smoke phase: storage-availability-start');
+    const storageAvailable = safeStorage.isEncryptionAvailable();
+    log('Release smoke phase: storage-availability-complete');
+    checks.secure_storage = false;
+    if (storageAvailable) {
+      log('Release smoke phase: storage-encrypt-start');
+      const encryptedProbe = safeStorage.encryptString(probe);
+      log('Release smoke phase: storage-encrypt-complete');
+      log('Release smoke phase: storage-decrypt-start');
+      checks.secure_storage = safeStorage.decryptString(encryptedProbe) === probe;
+      log('Release smoke phase: storage-decrypt-complete');
+    }
     async function runJob(kind, parameters) {
       const created = await requestApi('/api/v2/jobs', 'POST', { kind, params: parameters });
       for (let attempt = 0; attempt < 240; attempt++) {
@@ -763,6 +776,7 @@ async function showWindow() {
       checks.research.display_run_id = displayRun;
     }
     if (process.env.WORKBENCH_SMOKE_TYPOGRAPHY === '1') {
+      log('Release smoke phase: typography-start');
       async function fontPage(hash, selector, filename) {
         // Exercise the app's hash router through its own navigation links.
         // Electron loadURL can reject a fragment-only navigation immediately
@@ -801,8 +815,10 @@ async function showWindow() {
       if (checks.typography.composer.dialog_overflow) throw new Error('Typography composer overflow');
       fs.writeFileSync(path.join(dataDir, 'desktop-eva-composer.png'), (await window.webContents.capturePage()).toPNG());
       await window.webContents.executeJavaScript("document.querySelector('[aria-label=\"关闭对话框\"]').click()");
+      log('Release smoke phase: typography-complete');
     }
     if (process.env.WORKBENCH_SMOKE_BUDGETS === '1') {
+      log('Release smoke phase: budgets-start');
       // Acceptance exercises this application's composer against its packaged
       // service. Planning is read-only; this smoke never enqueues a long task.
       const capabilities = await requestApi('/api/v2/capabilities');
@@ -841,8 +857,10 @@ async function showWindow() {
       await delay(200);
       fs.writeFileSync(path.join(dataDir, 'desktop-budget-preview.png'), (await window.webContents.capturePage()).toPNG());
       await evaluate("document.querySelector('[aria-label=\"关闭对话框\"]').click()");
+      log('Release smoke phase: budgets-complete');
     }
     if (process.env.WORKBENCH_SMOKE_BACKUP === '1' || process.env.WORKBENCH_SMOKE_CONNECTION_RECOVERY === '1') {
+      log('Release smoke phase: backup-start');
       if (process.env.WORKBENCH_SMOKE_CONNECTION_RECOVERY === '1') await smokeNavigate('settings', "!!document.querySelector('[data-action=\"save-connection\"]')");
       else await window.loadURL(base + '/#settings');
       const button = "[...document.querySelectorAll('section[aria-label=\"研究数据备份\"] button')].find(button=>button.textContent.trim()==='备份研究数据')";
@@ -888,13 +906,16 @@ async function showWindow() {
         sqlite_integrity: 'pending bundled Python quick_check', isolated_profile: dataDir };
       await delay(300);
       fs.writeFileSync(path.join(dataDir, 'desktop-backup-controls.png'), (await window.webContents.capturePage()).toPNG());
+      log('Release smoke phase: backup-complete');
     }
     if (process.env.WORKBENCH_SMOKE_RESTORE === '1') await restoreAcceptance(checks);
     if (process.env.WORKBENCH_SMOKE_CONNECTION_RECOVERY === '1') await connectionRecoveryAcceptance(checks, rendererErrors);
     await delay(1500);
+    log('Release smoke phase: final-capture-start');
     const image = await window.webContents.capturePage();
     fs.writeFileSync(path.join(dataDir, 'desktop-smoke.png'), image.toPNG());
     fs.writeFileSync(path.join(dataDir, 'desktop-smoke.json'), JSON.stringify({ title: window.getTitle(), health: await requestApi('/api/v2/health'), overview: await requestApi('/api/v2/overview'), checks, version: app.getVersion(), timestamp: new Date().toISOString() }, null, 2));
+    log('Release smoke phase: final-capture-complete');
     app.quit();
   }
 }

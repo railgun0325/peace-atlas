@@ -23,6 +23,16 @@ from .report_machine_sections import extract_machine_sections
 from .report_synthesis import fit_report_input
 
 
+_GENERATION_PROTOCOL = 5
+_GENERATION_POLICY = (
+    " 使用 report_inventory.handle_normalization 与 profile_handle_mentions 中的原样/canonical 映射："
+    "X 用户名只差 ASCII 大小写或前导 @ 时为同一句柄，不得把用户名对应关系写成未核验；"
+    "这不核验组织运营主体、互认、隶属、背书或旧号迁移，不同拼写及跨平台不能合并。"
+    "竞争解释没有明确比较依据时不得使用‘更可能’等概率排序；可列未排序的可能解释并说明缺口。"
+    "原文中的概率说法须准确归因，引用或标注模型推断不补足分析自身的比较依据。"
+)
+
+
 _REVIEW_PROMPT = (
     "审阅一份公开资料研究报告，仅根据给定保存资料和研究运行元数据核对，不能联网或补造事实。"
     '返回JSON {"accepted":true,"issues":[{"code":"source_support|target_coverage|identity_qualifier|date|scope|citation",'
@@ -34,6 +44,10 @@ _REVIEW_PROMPT = (
     "保留本研究目标相关主体的具体领导、地区、派别、政党及刊物原文限定，并标为来源自称；"
     "不能只用‘不合并派别’警告替代具体差异，不得将介绍机关报推成账号隶属。"
     "JST发布日期、活动、计划和观察日期分开；当前账号与迁移旧号分开。"
+    "使用 report_inventory.handle_normalization 和原样/canonical 映射；X 用户名仅大小写或前导 @ 不同为同一句柄。"
+    "用户名相等不核验组织主体、互认或隶属；不同拼写和跨平台不能合并。"
+    "无比较依据的‘更可能’等竞争解释概率排序必须作为 source_support 修正，标为模型推断也不豁免；"
+    "可删除排序并保留未排序解释，或提供输入支持的比较依据；准确归因的来源概率说法不等于分析自身排序。"
     "逐项核对‘写明、也写、自称、介绍’等明确归因的实际文字；同句多条引用须逐条核对，不能只凭其中一条支持整体。"
     "所有新闻、帖文及其他保存材料都须复核，不因缺少账号简介或关系而跳过。"
     "逐来源保留否定、撤回、更正、条件、主体和时间限定，区分原计划与实际举行、来源主张与分析判断；"
@@ -174,7 +188,7 @@ async def _request(payload, seconds, *, capacity=None):
 async def generate_checked_report(payload, data, items, research_context=None, *, previous_state=None,
                                    checkpoint=None, synthesis_checkpoint=None, previous_synthesis=None,
                                    time_budget_seconds=None, max_draft_attempts=3):
-    from .report_quality import deterministic_report_inventory, report_quality_issues
+    from .report_quality import deterministic_report_inventory, report_handle_identity_issues, report_quality_issues
     if (isinstance(max_draft_attempts, bool) or not isinstance(max_draft_attempts, int)
             or not 1 <= max_draft_attempts <= 12):
         raise PipelineError("报告修正轮数须为 1 至 12 的整数。")
@@ -197,7 +211,7 @@ async def generate_checked_report(payload, data, items, research_context=None, *
         if len(fragments) == 1:
             review.pop("fragment_reviews", None)
             review.pop("quotes", None)
-    system = payload["messages"][0]["content"]
+    system = payload["messages"][0]["content"] + _GENERATION_POLICY
     generation_capacity = configured_model_capacity(model=payload["model"])
     initial_output = payload.get("max_tokens")
     if isinstance(initial_output, bool) or not isinstance(initial_output, int) or initial_output < 1:
@@ -206,7 +220,7 @@ async def generate_checked_report(payload, data, items, research_context=None, *
     provenance = [{key: value for key, value in item.items()
         if key not in {"topics", "entities", "locations"}} for item in items]
     fingerprint = hashlib.sha256(json.dumps({"data": data, "system": system,
-        "source_items": provenance, "model": payload["model"], "protocol": 4},
+        "source_items": provenance, "model": payload["model"], "protocol": _GENERATION_PROTOCOL},
         ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     old = previous_state if isinstance(previous_state, dict) and previous_state.get("input_fingerprint") == fingerprint else {}
     state = {"version": 1, "input_fingerprint": fingerprint, "attempts": copy.deepcopy(old.get("attempts") or []),
@@ -214,6 +228,19 @@ async def generate_checked_report(payload, data, items, research_context=None, *
         "raw_draft": old.get("raw_draft", old.get("draft")),
         "machine_section_audit": copy.deepcopy(old.get("machine_section_audit")),
         "revision_issues": copy.deepcopy(old.get("revision_issues") or []), "complete": bool(old.get("complete"))}
+    if isinstance(previous_state, dict) and previous_state.get("input_fingerprint") and not old:
+        # The immutable parent job/report retains the full old candidate and
+        # requests. Record why it was superseded without duplicating its large
+        # evidence notes or treating it as this generation's accepted draft.
+        draft = previous_state.get("raw_draft", previous_state.get("draft"))
+        state["invalidated_previous_generation"] = {
+            "input_fingerprint": previous_state["input_fingerprint"],
+            "reason": "generation_input_or_policy_changed", "phase": previous_state.get("phase"),
+            "was_complete": bool(previous_state.get("complete")),
+            "attempt_count": len(previous_state.get("attempts") or []),
+            "draft_sha256": hashlib.sha256(draft.encode("utf-8")).hexdigest() if isinstance(draft, str) else None}
+    elif old.get("invalidated_previous_generation"):
+        state["invalidated_previous_generation"] = copy.deepcopy(old["invalidated_previous_generation"])
     # Operational output growth must not change the source/prompt fingerprint
     # or the fit_report_input reserve: its immutable compression protocol keys
     # accepted notes by that reserve. Old checkpoints have neither field.
@@ -320,6 +347,7 @@ async def generate_checked_report(payload, data, items, research_context=None, *
             if fitted_state is not None:
                 current_synthesis = copy.deepcopy(fitted_state)
             request_payload = copy.deepcopy(payload)
+            request_payload["messages"][0]["content"] = system
             request_payload["messages"][1]["content"] = compact_json(fitted)
             base_assessment = assess_messages(request_payload["messages"],
                 max_output_tokens=initial_output, capacity=generation_capacity)
@@ -408,9 +436,12 @@ async def generate_checked_report(payload, data, items, research_context=None, *
             issues.append({"code": "model_generated_url", "blocking": True,
                 "explanation": "报告只能使用输入来源编号 [S001]；删除模型生成的网址，包括已知网址，改用对应来源编号。"})
         advisories = report_quality_issues(markdown, items, research_context or {}, inventory)
+        identity_issues = report_handle_identity_issues(markdown, items, research_context or {})
+        issues += identity_issues
         latest = state["attempts"][-1] if state["attempts"] else {}
         latest["citation_audit"] = citation_audit
         latest["deterministic_review_advisories"] = copy.deepcopy(advisories)
+        latest["deterministic_identity_issues"] = copy.deepcopy(identity_issues)
         if not issues and requires_source_review and not state["complete"]:
             review_data = copy.deepcopy(data)
             review_data["candidate_report"] = markdown
@@ -469,6 +500,7 @@ async def generate_checked_report(payload, data, items, research_context=None, *
                 "source_review_requested": requires_source_review,
                 "source_inventory": copy.deepcopy(inventory),
                 "review_is_independent_fact_verification": False}
+        latest["accepted"] = False
         state.update(phase="correction_required", revision_issues=copy.deepcopy(issues), complete=False)
         await save()
     raise PipelineError("报告综合复核尚未通过；已保存来源阅读和草稿，未保存正式报告，可重试继续。")

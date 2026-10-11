@@ -388,9 +388,9 @@ class ApplicationFilesTests(unittest.TestCase):
                 self.assertFalse(any(Path(name).name in {".env", "connection.secure", "workbench.sqlite3", "legacy_main.py"} for name in names))
 
     def test_candidate_finalizer_uses_the_current_suffix(self):
-        self.assertEqual(BUILD.ARTIFACT_SUFFIX, "-foundation-recovery-20261011")
+        self.assertEqual(BUILD.ARTIFACT_SUFFIX, "-foundation-quality-20261011")
         finalizer = BUILD.MAC_FINALIZE.replace("@TARGET@", "macos-arm64").replace("@ARTIFACT_SUFFIX@", BUILD.ARTIFACT_SUFFIX)
-        self.assertIn("PEACE-ATLAS-2.0.0-macos-arm64-foundation-recovery-20261011-adhoc.zip", finalizer)
+        self.assertIn("PEACE-ATLAS-2.0.0-macos-arm64-foundation-quality-20261011-adhoc.zip", finalizer)
         self.assertNotIn("@ARTIFACT_SUFFIX@", finalizer)
 
 
