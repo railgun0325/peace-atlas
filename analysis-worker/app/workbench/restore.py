@@ -181,8 +181,9 @@ def _validate_schema(connection: _Connection, expected: dict, *, allow_legacy_de
     actual = _schema(connection)
     names = set(actual["tables"])
     current_names = set(expected["tables"])
-    legacy_deferred = (allow_legacy_deferred and "wb_research_deferred" in current_names
-                       and names == current_names - {"wb_research_deferred"})
+    optional_legacy = {'wb_research_deferred', 'wb_public_source_cache'}
+    legacy_deferred = (allow_legacy_deferred and names < current_names
+                       and current_names - names <= optional_legacy)
     if names != current_names and not legacy_deferred:
         raise RestoreError("恢复文件不是当前版本的完整工作台备份；表结构缺失或包含未知内容。", "restore_schema")
     for name, shape in actual["tables"].items():
@@ -218,6 +219,7 @@ _JSON_FIELDS = {
     "wb_research_claim_observations": {"record": dict},
     "wb_research_deferred": {"record": (dict, str)},
     "wb_drafts": {"data": dict},
+    "wb_public_source_cache": {"page": dict},
 }
 
 
@@ -422,7 +424,7 @@ def _validate_data(connection: _Connection, deadline: _Deadline) -> None:
                     deadline.check()
                     _timestamp(row[0], f"{table}.{column['name']}", optional=not required)
     for table, fields in _JSON_FIELDS.items():
-        if table == "wb_research_deferred" and table not in table_names:
+        if table in {"wb_research_deferred", "wb_public_source_cache"} and table not in table_names:
             # Schema validation permits exactly the complete prior version;
             # the source stays read-only and this one table is added in stage.
             continue
@@ -587,6 +589,9 @@ def prepare_restore(source: Path, output_dir: Path, *, timeout_seconds: float = 
                 if legacy_deferred:
                     from .research_frontier import DEFERRED_TABLE_SQL
                     candidate.execute(DEFERRED_TABLE_SQL)
+                    from .public_source_cache import CACHE_TABLE_SQL, CACHE_INDEX_SQL
+                    candidate.execute(CACHE_TABLE_SQL)
+                    candidate.execute(CACHE_INDEX_SQL)
                     candidate.commit()
                 _validate_schema(candidate, expected)
                 interrupted = _interrupt_jobs(candidate, deadline)

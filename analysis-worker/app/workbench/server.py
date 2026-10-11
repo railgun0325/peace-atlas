@@ -333,6 +333,8 @@ class AccountData(BaseModel):
 
 class ReportRetryOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    input_mode: Literal["original", "latest"] | None = None
+    input_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     analysis_harness: Literal["off", "dsh"] | None = None
     harness_max_model_calls: int | None = Field(default=None, ge=0, le=4096, strict=True)
     harness_max_tool_calls: int | None = Field(default=None, ge=0, le=65536, strict=True)
@@ -900,14 +902,17 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
 
     @app.get("/api/v2/jobs")
     def jobs(request: Request, page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=200)):
-        return db(request).list_jobs(page=page, page_size=page_size)
+        from .report_inputs import project_report_job
+        result = db(request).list_jobs(page=page, page_size=page_size)
+        return {**result, "items": [project_report_job(job) for job in result["items"]]}
 
     @app.get("/api/v2/jobs/{job_id}")
     def job(request: Request, job_id: str):
+        from .report_inputs import project_report_job
         result = db(request).get_job(job_id)
         if result is None:
             raise LookupError(job_id)
-        return {**result, "events": db(request).job_events(job_id)}
+        return {**project_report_job(result), "events": db(request).job_events(job_id)}
 
     @app.post("/api/v2/jobs", status_code=202)
     def create_job(request: Request, payload: JobRequest):
@@ -946,6 +951,7 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
 
     @app.post("/api/v2/jobs/{job_id}/cancel")
     def cancel_job(request: Request, job_id: str):
+        from .report_inputs import project_report_job
         result = db(request).request_cancel(job_id)
         if result is None:
             raise LookupError(job_id)
@@ -953,10 +959,15 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
                 and result['params'].get('_account_verification') is True):
             from .account_verification import finish_schedule
             finish_schedule(db(request), result, 'cancelled')
-        return result
+        return project_report_job(result)
+
+    @app.get("/api/v2/jobs/{job_id}/retry-preview")
+    def retry_preview(request: Request, job_id: str):
+        return db(request).report_retry_preview(job_id)
 
     @app.post("/api/v2/jobs/{job_id}/retry", status_code=202)
     def retry_job(request: Request, job_id: str, options: ReportRetryOptions | None = None):
+        from .report_inputs import project_report_job
         overrides = options.model_dump(exclude_none=True) if options else None
         def validate_effective_report(params):
             if params.get("analysis_harness") == "dsh":
@@ -964,7 +975,7 @@ def create_app(store: Store | None = None, *, run_worker: bool = True) -> FastAP
                 if not harness_capability()["available"] or not pipeline.capabilities()["llm"]["configured"]:
                     raise ValueError("DSH 工具分析需要已安装研究运行时及就绪的 AI 连接。")
         try:
-            return db(request).retry_job(job_id, report_options=overrides, report_validator=validate_effective_report)
+            return project_report_job(db(request).retry_job(job_id, report_options=overrides, report_validator=validate_effective_report))
         except RetryConflict as exc:
             raise HTTPException(409, str(exc)) from exc
 

@@ -9,7 +9,7 @@ from app.workbench.pipeline import PipelineError
 from app.workbench.job_retries import report_resume_checkpoint
 from test_workbench_harness_report_integration import (
     synthetic_model_settings, fake_sidecar, synthetic_transport, create_run,
-    create_report, terminal, SYNTHETIC_KEY, REASONING,
+    create_report, terminal, retry_report, SYNTHETIC_KEY, REASONING,
 )
 
 
@@ -22,7 +22,7 @@ def test_two_draft_failures_keep_completed_harness_before_third_retry(monkeypatc
         first=create_report(client,run)
         assert first['status']=='failed'
         original=copy.deepcopy(first['result']['report_checkpoint']['harness_state'])
-        second_create=client.post(f"/api/v2/jobs/{first['id']}/retry")
+        second_create=retry_report(client,first['id'])
         assert second_create.status_code==202
         second=terminal(client,second_create.json()['id'])
         assert second['status']=='failed'
@@ -31,7 +31,7 @@ def test_two_draft_failures_keep_completed_harness_before_third_retry(monkeypatc
         assert checkpoint['harness_state']['reused_completed_checkpoint'] is True
         for field in ('trace','findings','input_fingerprint','model_calls','tool_calls'):
             assert checkpoint['harness_state'][field]==original[field]
-        third_create=client.post(f"/api/v2/jobs/{second['id']}/retry")
+        third_create=retry_report(client,second['id'])
         assert third_create.status_code==202
         third=terminal(client,third_create.json()['id'])
         assert third['status']=='succeeded'
@@ -52,7 +52,7 @@ def test_single_retry_report_snapshot_retains_the_same_completed_harness(monkeyp
     run=create_run(store)
     with TestClient(create_app(store)) as client:
         first=create_report(client,run)
-        created=client.post(f"/api/v2/jobs/{first['id']}/retry")
+        created=retry_report(client,first['id'])
         assert created.status_code==202
         completed=terminal(client,created.json()['id'])
         assert completed['status']=='succeeded'
@@ -77,7 +77,7 @@ def test_synthesis_failure_retains_prior_generation_and_reused_harness(monkeypat
             await kwargs['synthesis_checkpoint']({'fixture_phase':'saved-before-failure'})
             raise PipelineError('Synthetic synthesis failure after a durable checkpoint')
         monkeypatch.setattr(report_generation,'generate_checked_report',fail_after_synthesis_checkpoint)
-        created=client.post(f"/api/v2/jobs/{first['id']}/retry")
+        created=retry_report(client,first['id'])
         assert created.status_code==202
         second=terminal(client,created.json()['id'])
         assert second['status']=='failed'
@@ -98,11 +98,13 @@ def test_legacy_second_failure_recovers_missing_harness_from_same_branch(monkeyp
     run=create_run(store)
     with TestClient(create_app(store)) as client:
         first=create_report(client,run)
-        created=client.post(f"/api/v2/jobs/{first['id']}/retry")
+        created=retry_report(client,first['id'])
         assert created.status_code==202
         second=terminal(client,created.json()['id'])
         assert second['status']=='failed'
-        legacy=copy.deepcopy(second['result'])
+        # Polling intentionally projects the full input to a receipt. Preserve
+        # the actual frozen input while simulating only a missing stage field.
+        legacy=copy.deepcopy(store.get_job(second['id'])['result'])
         legacy['report_checkpoint'].pop('harness_state')
         # Arrange the shape already saved by the old release in owned SQLite.
         # Normal product writes must continue to refuse terminal-job mutation.
@@ -110,7 +112,7 @@ def test_legacy_second_failure_recovers_missing_harness_from_same_branch(monkeyp
             store._execute(connection,'UPDATE wb_jobs SET result=? WHERE id=?',
                 (json.dumps(legacy,ensure_ascii=False),second['id']))
         before=copy.deepcopy(store.get_job(second['id']))
-        created=client.post(f"/api/v2/jobs/{second['id']}/retry")
+        created=retry_report(client,second['id'])
         assert created.status_code==202
         completed=terminal(client,created.json()['id'])
         assert completed['status']=='succeeded'

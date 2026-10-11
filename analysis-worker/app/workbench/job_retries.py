@@ -41,7 +41,8 @@ def report_resume_checkpoint(params, parent, get_job):
     root_id = metadata.get("root_job_id")
     if metadata.get("parent_job_id") != parent.get("id") or not isinstance(root_id, str):
         return state
-    operational = {RETRY_METADATA, "time_budget_seconds", "harness_max_model_calls", "harness_max_tool_calls"}
+    operational = {RETRY_METADATA, "_report_input_ref", "_report_input_mode",
+                   "time_budget_seconds", "harness_max_model_calls", "harness_max_tool_calls"}
     def scope(value):
         return json.dumps({key: value[key] for key in value if key not in operational},
             ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -281,6 +282,15 @@ class JobRetries:
                     params["_analysis_only"] = True
         return params
 
+    def report_retry_preview(self, job_id):
+        from .report_inputs import retry_preview
+        with self._transaction() as connection:
+            requested = self._job(self._execute(connection, "SELECT * FROM wb_jobs WHERE id=?", (job_id,)).fetchone())
+            if requested is None:
+                raise LookupError("任务不存在")
+            _, latest = self._retry_branch(connection, job_id)
+        return retry_preview(self, requested, latest)
+
     def retry_job(self, job_id: str, *, report_options: dict | None = None, report_validator=None) -> dict:
         """Reserve one branch and create only its next explicit failed retry."""
         from .store import _now
@@ -299,22 +309,56 @@ class JobRetries:
             if not self._job_retryable(connection, latest):
                 raise ValueError(self._retry_refusal(latest))
             params = self._retry_params(connection, latest, root)
+            selected_input = None
             if report_options:
                 if latest["kind"] != "report" or not isinstance(report_options, dict):
                     raise ValueError("只有报告重试可以调整分析运行参数。")
                 limits = {"harness_max_model_calls": (0, 4096), "harness_max_tool_calls": (0, 65536), "time_budget_seconds": (0, 2592000)}
-                if set(report_options) - {"analysis_harness", *limits}:
+                if set(report_options) - {"analysis_harness", "input_mode", "input_sha256", *limits}:
                     raise ValueError("报告重试只能调整调查方式和运行上限，不能更改来源范围。")
                 for key, value in report_options.items():
-                    if key == "analysis_harness":
+                    if key == "input_mode":
+                        if not isinstance(value, str) or value not in {"original", "latest"}:
+                            raise ValueError("报告重试输入方式只能为 original 或 latest。")
+                    elif key == "input_sha256":
+                        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+                            raise ValueError("报告重试须提交免费预览的输入 SHA-256。")
+                    elif key == "analysis_harness":
                         if not isinstance(value, str) or value not in {"off", "dsh"} or (value == "dsh" and params.get("mode") != "ai"):
                             raise ValueError("DSH 工具分析仅适用于 AI 报告模式。")
                     elif type(value) is not int or not limits[key][0] <= value <= limits[key][1] or key.startswith("harness_") and value == 1 or key == "time_budget_seconds" and 0 < value < 60:
                         raise ValueError("报告重试运行上限格式无效。")
-                params.update(report_options)
+                params.update({key: value for key, value in report_options.items() if key not in {"input_mode", "input_sha256"}})
+            if latest["kind"] == "report":
+                from .report_inputs import current_report_input, saved_input, validate_report_input_snapshot
+                mode = (report_options or {}).get("input_mode", "original")
+                if mode == "original":
+                    selected_input = validate_report_input_snapshot(saved_input(latest), params)
+                    expected = selected_input["sha256"]
+                else:
+                    selected_input = current_report_input(self, params)
+                    expected = selected_input["input_fingerprint"]
+                if (report_options or {}).get("input_sha256") != expected:
+                    raise RetryConflict("报告输入与免费预览不一致或未提供预览 SHA-256；请重新预览后重试。")
+                params.pop("_report_input_ref", None)
+                params["_report_input_mode"] = mode
+                if mode == "original":
+                    params["_report_input_ref"] = {"job_id": latest["id"], "sha256": selected_input["sha256"]}
             if latest["kind"] == "report" and report_validator is not None:
                 report_validator(copy.deepcopy(params))
             job = self.create_job(latest["kind"], params, _connection=connection)
+            if selected_input is not None:
+                # Bind the checked input in the same transaction as the child.
+                # A later source/review update cannot change queued latest work.
+                job["result"] = {"report_input_snapshot": selected_input}
+                previous_checkpoint = (latest.get("result") or {}).get("report_checkpoint")
+                if isinstance(previous_checkpoint, dict):
+                    # Preserve it even if this child is cancelled before its
+                    # first reading callback. Every stage still checks its own
+                    # exact input; copying a candidate is not cache acceptance.
+                    job["result"]["report_checkpoint"] = copy.deepcopy(previous_checkpoint)
+                from .store import _json
+                self._execute(connection, "UPDATE wb_jobs SET result=? WHERE id=?", (_json(job["result"]), job["id"]))
             if latest["kind"] == "research" and params.get("resume_run_id"):
                 self._attach_research_job(connection, params["resume_run_id"], job["id"], _now())
             self._event(connection, job["id"], f"由任务 {latest['id']} 重试创建；原记录保留。")

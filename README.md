@@ -2,18 +2,18 @@
 
 日本和平与反战运动公开信息研究工作台。把新闻、社媒正文、来源账号、可核对关系、活动线索与研究报告保存在本机；每项结论保留原文出处和生成时的证据快照，方便回查、续研和导出。
 
-当前版本为 **PEACE ATLAS 2.0.0 · 2026-10-11 自动审核与恢复修复版**，对应冻结构建 `20261011-023729`，GitHub 标签为 `v2.0.0-review-assurance.20261011`。具体文件、冻结版本、哈希与验收范围以[本轮发布记录](docs/RELEASE_20261011.md)为准。
+当前源码与候选包为 **PEACE ATLAS 2.0.0 · 2026-10-11 来源复用与报告恢复版**，对应冻结构建 `20261011-041440`，发布标签为 `v2.0.0-foundation-reuse.20261011`。上传、正式升级及平台验收状态以[本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md)为准；草稿或候选包不代表全部平台已完成原生验证。
 
 ## 下载与开始使用
 
-[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-review-assurance.20261011)
+[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮候选 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-foundation-reuse.20261011)
 
 | 系统 | 发布资产 | 启动方式与验收范围 |
 | --- | --- | --- |
-| Windows x64 | [Windows ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-review-assurance.20261011/PEACE-ATLAS-2.0.0-windows-x64-harness-candidate-20261010.zip) | 完整解压目录，双击 `PEACE ATLAS.exe`。桌面包自带 Python、Electron、Chromium 和固定 DSH 运行时。 |
-| Apple Silicon macOS 13+ | [macOS ARM64 ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-review-assurance.20261011/PEACE-ATLAS-2.0.0-macos-arm64-harness-candidate-20261010.zip) | 包结构、文件、哈希、权限与符号链接已检查；Mac 原生启动、Apple 原生签名验证及公证尚未验收。使用前按[构建文档](desktop/BUILDING.md)核对本机收尾步骤。 |
+| Windows x64 | [Windows ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-foundation-reuse.20261011/PEACE-ATLAS-2.0.0-windows-x64-foundation-reuse-20261011.zip) | 完整解压目录，双击 `PEACE ATLAS.exe`。桌面包自带 Python、Electron、Chromium 和固定 DSH 运行时。 |
+| Apple Silicon macOS 13+ | [macOS ARM64 ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-foundation-reuse.20261011/PEACE-ATLAS-2.0.0-macos-arm64-foundation-reuse-20261011.zip) | 包结构、文件、哈希、权限与符号链接已检查；Mac 原生启动、Apple 原生签名验证及公证尚未验收。使用前按[构建文档](desktop/BUILDING.md)核对本机收尾步骤。 |
 
-仓库和 Release 为私有。接收者需要使用受邀并获仓库访问权限的 GitHub 账号；链接或二维码只负责打开页面，不授予访问权限。分享前由仓库所有者明确授权访问。发布资产的历史后缀 `harness-candidate-20261010` 保留原冻结文件名，具体版本以 Release 标签和发布记录为准。
+仓库和 Release 为私有。接收者需要使用受邀并获仓库访问权限的 GitHub 账号；链接或二维码只负责打开页面，不授予访问权限。分享前由仓库所有者明确授权访问。旧自动审核修复版保留独立的[标签与记录](docs/RELEASE_20261011.md)，不替换旧包内容。下载前检查本轮 Release 是否已发布并包含相应完整资产。
 
 第一次使用按这个顺序完成一个小范围任务：**检查能力与会话 → 保存 AI 连接 → 创建研究或采集 → 在任务中心跟踪 → 回查资料与关系依据 → 生成并下载报告 → 保存研究备份。** 采集 X 或 Instagram 时，在应用提供的登录入口使用自己的账号；公开平台的实际访问限制会显示在任务诊断中。
 
@@ -21,14 +21,14 @@
 
 - **保存与检索公开资料**：RSS / Atom、Google News RSS、X、Instagram、JSON 导入、正文阅读、来源追踪和重复检测。
 - **研究账号与关系**：从关键词或指定账号出发，保存发现路径、公开观察关系和分支断点；账号类型、主体身份核验与关系推断分别记录。公开自述保留在来源原文中，独立的声明类型层仍在路线图中。
-- **生成有来源的研究报告**：规则证据整理，或使用 `deepseek-flash` 等已配置模型进行全文阅读、摘录复核、DSH 工具调查、报告生成与复核。报告保留独立输入快照和可继续的失败断点。
-- **批量自动审核与核验**：逐批审核账号类型、关系主张及活动，调用工具核对原文和独立公开出处，保存确认、排除或证据不足的结果；取消和失败保留已提交批次。
+- **生成有来源的研究报告**：规则证据整理，或使用 `deepseek-flash` 等已配置模型进行全文阅读、摘录复核、DSH 工具调查、报告生成与复核。付费分析前保存完整输入；失败后先免费预览，明确选择原输入续跑或最新状态重新生成，逐阶段验证可复用内容。
+- **批量自动审核与核验**：逐批审核账号类型、关系主张及活动，调用工具核对原文和独立公开出处，保存确认、排除或证据不足的结果；取消和失败保留已提交批次。默认复用一小时内有效网页捕获，也可刷新或关闭缓存；账号身份结论仍独立校验。
 - **跟踪任务与活动地图**：预估并确认研究范围，创建任务串，查询进度、取消及重试。地图仅统计选定实际活动日期内已核对、已定位且去重的活动。
 - **备份、恢复及外部 Agent 接入**：在线研究数据库备份、桌面确认恢复、可恢复资料清理；通过独立授权的本机 Skill / CLI 读取、研究、报告与审核。
 
 本版已接入官方 **DeepSeek Harness SDK/runtime 0.2.0-rc.2** 的实际工具调用循环。模型通过 API 发出请求，DSH 运行时根据任务调用受约束的证据工具，工具结果再进入后续模型决策、来源复核和保存流程。桌面包使用自身 Electron 的 Node 运行时，用户无需另行启动 DSH 桌面应用。模型名称以用户保存的连接及提供方实际支持为准，默认建议为 `deepseek-flash`。
 
-本次冻结源码通过 **2,688 项后台、172 项前端、62 项桌面及 17 项构建测试，共 2,939 项，0 失败**。新包另通过 14 项核心流程、30 次 Agent CLI 执行、官方 DSH SDK 的实际运行及受控传输故障恢复；正式应用升级前后 22 张表逐值、逐类型、逐结构保留检查通过。SDK 恢复测试在 4 次受控 HTTP 尝试中恢复两次失败，10 次工具没有重复执行，4 项决定原子保存。真实付费模型审核、语义抽查及其未解决问题另见[发布记录](docs/RELEASE_20261011.md)，不把受控测试视作真实模型质量保证。
+本次冻结源码通过 **2,750 项后台、198 项前端、62 项桌面及 17 项构建测试，共 3,027 项，0 失败**。两平台新包通过独立内容审计，Windows 隔离原生启动、长任务参数预览和备份下载通过。打包接口、正式升级与付费模型运行按实际结果记入[本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md)。上一版真实 DeepSeek 批量审核的结果保留在[审核修复版记录](docs/RELEASE_20261011.md)；新包的模拟回归不能代替真实模型研究质量。
 
 ## 操作说明与项目判断
 
@@ -39,8 +39,8 @@
 | [Harness 补充说明](docs/USER_MANUAL_20261010_HARNESS.md) | DSH 工具调查、报告续跑及结果判断 |
 | [自动审核与核验说明](docs/AUTOMATIC_REVIEW_20261011.md) | 批量审核范围、独立出处、证据不足及重试规则 |
 | [Agent 接入契约](docs/AGENT_INTEGRATION.md) / [Skill 安装](analysis-worker/app/workbench/agent_assets/INSTALL.md) | 本机接口、授权边界及安装步骤 |
-| [项目基础审查](docs/FOUNDATION_REVIEW_20261011.md) / [路线图](docs/ROADMAP.md) | 当前实现判断、结构问题与后续优先级 |
-| [发布记录](docs/RELEASE_20261011.md) / [桌面构建](desktop/BUILDING.md) | 冻结文件、验收、哈希和平台限制 |
+| [项目基础审查](docs/FOUNDATION_REVIEW_20261011.md) / [第一批实现](docs/FOUNDATION_IMPLEMENTATION_20261011.md) / [路线图](docs/ROADMAP.md) | 基线判断、已实施改进与后续优先级 |
+| [本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md) / [审核修复版记录](docs/RELEASE_20261011.md) / [桌面构建](desktop/BUILDING.md) | 冻结文件、验收、哈希和平台限制 |
 
 公开账号候选不等于已核验主体，关注、共同链接或模型推断不等于组织隶属；证据不足会保留未知。资料中的地名提及和发布日期不能代替实际活动地点或活动日期。任务完成状态只适用于本次范围，不保证完整平台历史、全部公开关系或持续可访问。
 

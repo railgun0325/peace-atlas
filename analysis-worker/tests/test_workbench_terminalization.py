@@ -49,7 +49,7 @@ def test_real_database_terminal_fault_blocks_next_work_and_preserves_report_on_e
             WHEN NEW.id='%s' AND NEW.status IN ('succeeded','failed','interrupted','cancelled','partial')
             BEGIN SELECT RAISE(ABORT, 'temporary terminal storage fault'); END""" % first["id"])
     calls = []
-    async def report(material, request):
+    async def report(material, request, **options):
         calls.append(request["title"])
         return {"title": request["title"], "markdown": "# Saved report\nSource snapshot.",
             "start_date": request["start_date"], "end_date": request["end_date"],

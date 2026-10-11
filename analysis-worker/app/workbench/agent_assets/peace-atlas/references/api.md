@@ -18,17 +18,24 @@ Use an input JSON file when shell quoting differs. The CLI creates output files 
 | `items.get` | `{id}` | read saved body and source metadata |
 | `jobs.list`, `reports.list`, `research.list` | page/page_size | read |
 | `job.get`, `report.get`, `research.graph`, `research.export` | `{id}` | read |
+| `job.retry_preview` | `{id:<job>}` | read; report input availability, exact reading candidates and stage/cost conditions, no model call |
 | `query.plan` | current query schema; `use_ai:false` | rules-only preview, no paid model call |
 | `research.start`, `report.start`, `collection.start` | `{params:<current schema>}` | run; preview → confirmation → queued job |
 | `research.continue` | `{id:<run>,limits:{...optional stops}}` | run; preview binds saved current job + limits |
-| `job.cancel` | `{id:<job>}` | run; preview → request cancellation |
-| `job.retry` | `{id:<job>,options:{...supported report overrides}}` | run; preview → explicit retry |
+| `job.cancel` | `{id:<job>}` | run for ordinary business jobs, review for automatic-review jobs; preview → request cancellation |
+| `job.retry` | `{id:<job>,options:{...supported report overrides}}` | run for ordinary business jobs, review for automatic-review jobs; preview → explicit retry |
 | `items.cleanup` | `{ids:[...],action:"trash"/"restore",reason}` | cleanup; digest-bound recoverable action |
 | `review.queue` | `{kind:"accounts"/"claims"/"activities",pending_only:true,page:1,page_size:100}` | read; IDs, evidence and expected_sha256 |
 | `review.batch` | `{accounts:[...],claims:[...],activities:[...]}` | review; atomic, snapshot-bound decisions; up to 500 per commit |
-| `review.start` | `{kinds:["accounts","claims","activities"],batch_size:16,recheck:false,use_public_network:true}` | review; estimate → confirmation → DeepSeek/DSH investigation and public backlink checks |
+| `review.start` | `{kinds:["accounts","claims","activities"],batch_size:16,recheck:false,use_public_network:true,source_cache_mode:"reuse",source_cache_ttl_seconds:3600}` | review; estimate → confirmation → DeepSeek/DSH investigation and public backlink checks |
 
 Read `/agents/v1/schema` for complete, current JSON schemas. Identifiers cannot contain path separators. Unknown operations/extra arguments are rejected. The operation catalog never accepts arbitrary URLs/API paths. Login jobs cannot be mutated by this channel.
+
+Automatic review is a saved `collect` job with `params._evidence_review:true`. `job.get` can already read its progress. Its cancel/retry operations require the independent `review` grant, not just `run`; both preview and execution check the actual saved job again. The operation schema exposes this distinction as `scope_by_job`. Do not infer review permission from the generic collection job kind.
+
+For automatic review, `source_cache_mode` defaults to `reuse`; `refresh` skips persistent reads but can save fresh successful captures; `off` neither reads nor writes persistent copies. All modes keep the run's own fixed in-memory captures. `source_cache_ttl_seconds` is a strict integer from 1 to 86400, default 3600; it limits cross-run freshness, not job duration. `shadow` is a diagnostic comparison mode, not the normal user choice. Network-disabled review cannot read an external source from persistent cache. Reused source content never confers another target account's identity authority. `job.get` may include `result.source_cache` counters, capture/expiry receipts and an explicit receipt truncation count. Distinguish successful captures from attempted requests and cache reuse from a fresh live read. Legacy jobs without these fields do not have measured cache statistics.
+
+For report retry, first read `job.retry_preview`. `original_input.available` requires a complete validated snapshot; historical jobs without one must not silently switch inputs. Set `job.retry` arguments to `{id,options:{input_mode:"original"}}` to retain that exact input, or explicitly choose `input_mode:"latest"` to use current saved material and review context while preserving the goal/date scope. The mutation preview binds the selected input hash; execution validates it again. Do not invent hashes or reuse a stale preview. Matching fragment fingerprints and quotes are reuse candidates, not proof that DSH, draft or compression can skip execution. Missing historical context makes change counts unknown, not zero. A non-research report with `read_original:true` cannot use latest-input retry because that would skip its requested capture; create a new report to read originals, or use its existing complete original snapshot. Normal status responses expose only the saved input summary; independent saved report exports retain their full source snapshot.
 
 For a write, `/agents/v1/preview` stores the normalized operation/arguments, grant ID, business estimate/cleanup proof and a five-minute expiry. `/agents/v1/execute` requires the exact same normalized arguments, that preview ID, `confirmed:true` and an 8–80 character stable operation key. The server serializes actions and remembers the original result for this grant/backend lifetime. A consumed preview cannot run under a new key. Matching retries return the original response (also on failure); changing arguments under a key conflicts. Revoke/restart invalidates the grant, so idempotency receipts are not a cross-restart recovery mechanism. Query the saved business job ID to resume work after restart.
 

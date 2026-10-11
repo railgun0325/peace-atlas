@@ -7,14 +7,13 @@ import copy
 import json
 import re
 import unicodedata
-from urllib.parse import urljoin, urldefrag
-
-from bs4 import BeautifulSoup
+from urllib.parse import urldefrag
 
 from . import pipeline
 from .harness_evidence import EvidenceGatewayError, _tool
 from .harness_runtime import run_evidence_harness
 from .review import BatchArgs, apply_batch, digest, preview_batch
+from .public_source_cache import PublicSourceCache, extract_page
 
 
 SYSTEM = '''你是 PEACE ATLAS 的公开证据审核员。你的任务是审核本批全部指定记录，不是写研究报告。
@@ -43,12 +42,13 @@ unknown/inconclusive 也是完整审核结果，不能为了完成数量猜测�
 
 
 class ReviewGateway:
-    def __init__(self, rows, *, use_public_network=True, _pages=None, _searches=None):
+    def __init__(self, rows, *, use_public_network=True, _pages=None, _searches=None, _source_cache=None):
         self.rows = copy.deepcopy(rows)
         self.by_id = {f"{row['kind']}:{row['id']}": row for row in rows}
         self.network = use_public_network
         self.pages = _pages if _pages is not None else {}
         self.searches = _searches if _searches is not None else {}
+        self.source_cache = _source_cache
         self.tools = [
             _tool('list_evidence', '本批待审记录的目录、完整决定输入及证据编号。', {'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 40}}, ()),
             _tool('read_evidence', '读取保存原文，或读取独立公开 HTTPS 网页。不能访问社媒登录页或内网。', {'citation_id': {'type': 'string', 'maxLength': 2048}, 'offset': {'type': 'integer', 'minimum': 0}, 'limit': {'type': 'integer', 'minimum': 1, 'maximum': 12000}}, ('citation_id',)),
@@ -89,6 +89,8 @@ class ReviewGateway:
         return {**page, 'registered_account_keys': sorted(registered)}
 
     async def _read(self, identity):
+        if self.source_cache is not None:
+            self.source_cache.check_cancelled()
         if not isinstance(identity, str) or not 1 <= len(identity) <= 2048:
             raise EvidenceGatewayError('来源编号无效。')
         if identity in self.by_id:
@@ -100,29 +102,34 @@ class ReviewGateway:
             if self.pages[identity].get('read_failed'):
                 raise EvidenceGatewayError('此公开网页本次调查未能读取；保留证据不足，可在后续重新审核。',
                                            code=self.pages[identity].get('failure_code', 'public_source_unavailable'))
-            return self._page_for_batch(self.pages[identity])
+            page = self._page_for_batch(self.pages[identity])
+            if self.source_cache is not None:
+                self.source_cache.stats['run_hits'] += 1
+                if 'source_read_receipt' in page:
+                    page['source_read_receipt'] = {**page['source_read_receipt'], 'read_via': 'run'}
+            return page
         if not self.network:
             raise EvidenceGatewayError('本任务没有开启公开网页读取。', code='public_network_disabled')
-        from .account_verification import _independent_source_url, PublicLinks, account_link_key
+        from .account_verification import _independent_source_url
         try:
             requested = _independent_source_url(identity)
+            if self.source_cache is not None:
+                cached = await self.source_cache.lookup(requested)
+                if cached is not None:
+                    self.pages[identity] = cached
+                    return self._page_for_batch(cached)
+                self.source_cache.stats['fetch_calls'] += 1
             body, final, _ = await asyncio.wait_for(pipeline._fetch_public_feed(requested, accept='text/html, application/xhtml+xml'), 25)
+            if self.source_cache is not None:
+                self.source_cache.check_cancelled()
             final = _independent_source_url(final)
             if body.startswith(b'%PDF'):
                 self.pages[identity] = {'read_failed': True, 'failure_code': 'unsupported_public_source'}
                 raise EvidenceGatewayError('该出处是 PDF，本轮网页工具未提取正文；请寻找同一出版方 HTML 出处或保留证据不足。',
                                            code='unsupported_public_source')
-            links = PublicLinks()
-            links.feed(body.decode('utf-8', errors='replace'))
-            keys = sorted({key for raw in links.owner_links if (key := account_link_key(urljoin(final, raw)))})
-            linked_keys = sorted({key for raw in links.links if (key := account_link_key(urljoin(final, raw)))})
-            soup = BeautifulSoup(body, 'html.parser')
-            for element in soup.select('script,style,template,textarea,#comments,.comments-area'):
-                element.decompose()
-            text = soup.get_text('\n', strip=True)[:80000]
-            page = {'citation_id': requested, 'url': final, 'text': text, 'independent': True,
-                    'owner_account_keys': keys, 'linked_account_keys': linked_keys,
-                    'source_capture_sha256': digest({'url': final, 'text': text})}
+            page = extract_page(requested, body, final)
+            if self.source_cache is not None:
+                page = await self.source_cache.acquired(page, body)
             self.pages[identity] = page
             return self._page_for_batch(page)
         except EvidenceGatewayError:
@@ -160,7 +167,8 @@ class ReviewGateway:
             return {'valid': quote in page['text'], 'citation_id': args['citation_id'], 'quote': quote,
                     'url': page['url'], 'independent': page['independent'], 'owner_account_keys': page['owner_account_keys'],
                     'registered_account_keys': page.get('registered_account_keys', []),
-                    'source_capture_sha256': page['source_capture_sha256']}
+                    'source_capture_sha256': page['source_capture_sha256'],
+                    **({'source_read_receipt': page['source_read_receipt']} if 'source_read_receipt' in page else {})}
         if name == 'compare_evidence':
             values = args['citation_ids']
             if not isinstance(values, list) or not 1 <= len(values) <= 12 or any(not isinstance(value, str) for value in values):
@@ -378,11 +386,15 @@ async def run_auto_review(store, job, *, checkpoint, cancelled):
     done = {(row['kind'], row['id']) for row in state['results']}
     pending = [row for row in rows if (row['kind'], row['id']) not in done]
     pages, searches = {}, {}
+    source_cache = PublicSourceCache(store, mode=options.get('source_cache_mode', 'reuse'),
+        ttl_seconds=options.get('source_cache_ttl_seconds', 3600), cancelled=cancelled,
+        stats=state.setdefault('source_cache', {}))
+    state['source_cache'] = source_cache.stats
     for start in range(0, len(pending), options['batch_size']):
         if cancelled():
             raise asyncio.CancelledError()
         batch = pending[start:start+options['batch_size']]
-        gateway = ReviewGateway(batch, use_public_network=options['use_public_network'], _pages=pages, _searches=searches)
+        gateway = ReviewGateway(batch, use_public_network=options['use_public_network'], _pages=pages, _searches=searches, _source_cache=source_cache)
         state.update(phase='investigating', current_batch=len(state['batches']) + 1, current_batch_size=len(batch))
 
         async def harness_checkpoint(value):
@@ -406,6 +418,7 @@ async def run_auto_review(store, job, *, checkpoint, cancelled):
         await checkpoint(state)
         proof = await asyncio.to_thread(preview_batch, store, decisions)
         next_state = copy.deepcopy(state)
+        next_state['source_cache'] = source_cache.stats
         display = {(row['kind'], row['id']): (row['record'].get('name') or row['record'].get('title') or
                    f"{row['record'].get('subject_key', '')} → {row['record'].get('object_label', '')}") for row in batch}
         next_state['results'].extend({**decision, 'label': display[(decision['kind'], decision['id'])]} for decision in result['findings']['decisions'])

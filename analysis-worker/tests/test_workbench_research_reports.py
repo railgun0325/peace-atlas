@@ -76,6 +76,14 @@ def request_params(run):
             "mode": "ai", "read_original": False}
 
 
+def retry_report(client, job_id, *, input_mode="original"):
+    preview = client.get(f"/api/v2/jobs/{job_id}/retry-preview")
+    assert preview.status_code == 200, preview.text
+    source = preview.json()["original_input" if input_mode == "original" else "current_input"]
+    return client.post(f"/api/v2/jobs/{job_id}/retry", json={
+        "input_mode": input_mode, "input_sha256": source["sha256"]})
+
+
 def test_report_binds_goal_and_only_selected_run_without_promoting_identity(tmp_path, monkeypatch):
     store = Store(tmp_path / "research-report.sqlite3")
     run = create_run(store)
@@ -111,7 +119,7 @@ def test_failed_synthesis_retry_reuses_durable_completed_source_reviews(tmp_path
         assert not failed["result"].get("report_id")
         assert failed["result"]["report_checkpoint"]["complete"]
         assert store.list_reports()["total"] == 0
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
+        retried = retry_report(client, failed["id"])
         assert retried.status_code == 202, retried.text
         succeeded = terminal(client, retried.json()["id"])
         assert succeeded["status"] == "succeeded", succeeded
@@ -207,7 +215,7 @@ def test_retry_rereads_changed_body_instead_of_reusing_previous_quote(tmp_path, 
         # captured original; an arbitrary recapture is deliberately no overwrite.
         updated["metadata"]["text_representation"] = "original_after_platform_toggle"
         assert store.import_social([updated], [], [])["updated"] == 1
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
+        retried = retry_report(client, failed["id"], input_mode="latest")
         assert retried.status_code == 202, retried.text
         succeeded = terminal(client, retried.json()["id"])
         assert succeeded["status"] == "succeeded", succeeded
@@ -226,11 +234,11 @@ def test_second_failed_synthesis_retains_reused_reviews_for_a_third_attempt(tmp_
         created = client.post("/api/v2/jobs", json={"kind": "report", "params": request_params(run)})
         first = terminal(client, created.json()["id"])
         assert first["status"] == "failed"
-        second_id = client.post(f"/api/v2/jobs/{first['id']}/retry").json()["id"]
+        second_id = retry_report(client, first["id"]).json()["id"]
         second = terminal(client, second_id)
         assert second["status"] == "failed"
         assert second["result"]["report_checkpoint"]["complete"]
-        third_id = client.post(f"/api/v2/jobs/{second_id}/retry").json()["id"]
+        third_id = retry_report(client, second_id).json()["id"]
         third = terminal(client, third_id)
         assert third["status"] == "succeeded", third
         assert len([payload for payload, data in calls if payload.get("response_format") and "candidate_report" not in data]) == 1

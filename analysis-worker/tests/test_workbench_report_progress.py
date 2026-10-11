@@ -73,6 +73,7 @@ def test_real_checkpoint_callback_preserves_payload_and_records_final_note_count
         def get_job(self, jid): return {"cancel_requested": False}
         def add_job_event(self, jid, message): events.append(message)
     environment = {"asyncio": asyncio, "self": SimpleNamespace(store=Store()), "jid": "owned-job",
+                   "copy": copy, "input_state": {"value": {"sha256": "isolated-snapshot"}},
                    "params": {"research_run_id": "saved-run"}, "report_note_progress": report_note_progress,
                    "report_note_progress_message": report_note_progress_message}
     exec(compile(module, str(source), "exec"), environment)
@@ -80,6 +81,7 @@ def test_real_checkpoint_callback_preserves_payload_and_records_final_note_count
     before = copy.deepcopy(state)
     asyncio.run(environment["checkpoint_review"](state))
     assert records[-1]["result"]["report_checkpoint"] == before and state == before
+    assert records[-1]["result"]["report_input_snapshot"] == {"sha256": "isolated-snapshot"}
     assert records[-1]["progress"] == 88  # Coarse phase percentage, never invented per-request percent.
     assert "200/601" in events[-1] and "2/3" in events[-1] and "9/11" in events[-1]
     assert "报告来源复核笔记" in events[-1]

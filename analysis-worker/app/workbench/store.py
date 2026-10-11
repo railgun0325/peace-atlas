@@ -27,6 +27,7 @@ from .job_retries import JobRetries
 from .registry_graph import RegistryRepository
 from .activity_events import ActivityRepository
 from .cleanup import CleanupRepository
+from .public_source_cache import SourceCacheRepository
 
 
 UTC = timezone.utc
@@ -137,7 +138,7 @@ def _like(value: str) -> str:
     return "%" + value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
-class Store(ResearchRepository, ResearchBatches, JobRetries, RegistryRepository, ActivityRepository, CleanupRepository):
+class Store(ResearchRepository, ResearchBatches, JobRetries, RegistryRepository, ActivityRepository, CleanupRepository, SourceCacheRepository):
     def __init__(self, path: str | Path | None = None, database_url: str | None = None):
         self.database_url = database_url or (os.environ.get("WORKBENCH_DATABASE_URL") if path is None else None)
         self._postgres = bool(self.database_url)
@@ -264,6 +265,7 @@ class Store(ResearchRepository, ResearchBatches, JobRetries, RegistryRepository,
                 self._execute(connection, "INSERT INTO wb_account_keys (account_key,account_id) VALUES (?,?) ON CONFLICT DO NOTHING", (key, row["id"]))
         self._initialize_research()
         self._initialize_batches()
+        self._initialize_source_cache()
 
     def _migrate_job_kinds(self) -> None:
         """Extend kinds without replacing historical jobs, children or indexes."""

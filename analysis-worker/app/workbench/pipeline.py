@@ -791,8 +791,8 @@ async def _ai_report(snapshot: dict[str, Any], title: str, *, previous_review=No
     return markdown.rstrip() + "\n" + "\n".join(footer) + "\n"
 
 
-async def build_report(items: list[dict[str, Any]], params: dict[str, Any], *, research_context=None,
-                       previous_review=None, checkpoint=None, time_budget_seconds=None) -> dict[str, Any]:
+async def prepare_report_input(items: list[dict[str, Any]], params: dict[str, Any], *, research_context=None) -> dict[str, Any]:
+    """Select and number public evidence without providers or model settings."""
     start, end = _period(params)
     mode = params.get("mode", "evidence")
     if mode not in {"evidence", "ai"}:
@@ -854,17 +854,44 @@ async def build_report(items: list[dict[str, Any]], params: dict[str, Any], *, r
         "include_news": include_news, "include_social": include_social, "timezone": "Asia/Tokyo"}
     snapshot = {"version": 1, "captured_at": datetime.now(timezone.utc).isoformat(),
         "scope": scope, "mode": mode, "items": copy.deepcopy(selected), "exclusions": excluded,
-        "method": "japan_taxonomy_keyword_rules", "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash") if mode == "ai" else None,
-        "reasoning_effort": "high" if mode == "ai" else None, "max_output_tokens": 32768 if mode == "ai" else None}
+        "method": "japan_taxonomy_keyword_rules"}
     if research_context:
         snapshot["research_context"] = copy.deepcopy(research_context)
+    return snapshot
+
+
+async def build_report(items: list[dict[str, Any]], params: dict[str, Any], *, research_context=None,
+                       previous_review=None, checkpoint=None, time_budget_seconds=None,
+                       frozen_input=None, input_checkpoint=None) -> dict[str, Any]:
+    from .report_inputs import capture_report_input_snapshot, validate_report_input_snapshot
+    mode, harness_mode = params.get("mode", "evidence"), params.get("analysis_harness", "off")
+    if mode not in {"evidence", "ai"}:
+        raise PipelineError("报告模式只能是 evidence 或 ai。")
+    if harness_mode not in {"off", "dsh"} or (mode != "ai" and harness_mode != "off"):
+        raise PipelineError("DSH 工具分析仅适用于 AI 报告模式。")
+    if frozen_input is not None:
+        bound = validate_report_input_snapshot(frozen_input, params)
+        snapshot = copy.deepcopy(bound["snapshot"])
+        snapshot["captured_at"] = bound["captured_at"]
+    else:
+        snapshot = await prepare_report_input(items, params, research_context=research_context)
+        bound = capture_report_input_snapshot(snapshot, params)
+    # Saving this callback must finish before any AI, DSH or evidence-mode work.
+    if input_checkpoint:
+        pending = input_checkpoint(copy.deepcopy(bound))
+        if inspect.isawaitable(pending):
+            await pending
+    title = strip_html(str(params.get("title") or "日本和平与反战研究简报")).strip()
+    snapshot.update(model=os.getenv("DEEPSEEK_MODEL", "deepseek-flash") if mode == "ai" else None,
+                    reasoning_effort="high" if mode == "ai" else None,
+                    max_output_tokens=32768 if mode == "ai" else None)
     if harness_mode == "dsh":
         snapshot.update(analysis_harness="dsh", harness_max_model_calls=params.get("harness_max_model_calls", 24),
             harness_max_tool_calls=params.get("harness_max_tool_calls", 64))
     markdown = await _ai_report(snapshot, title, previous_review=previous_review, checkpoint=checkpoint,
                                 time_budget_seconds=time_budget_seconds) if mode == "ai" else await asyncio.to_thread(_evidence_markdown, snapshot, title)
-    return {"title": title, "start_date": scope["start_date"], "end_date": scope["end_date"], "mode": mode,
-            "markdown": markdown, "snapshot": snapshot, "source_count": len(selected)}
+    return {"title": title, "start_date": snapshot["scope"]["start_date"], "end_date": snapshot["scope"]["end_date"], "mode": mode,
+            "markdown": markdown, "snapshot": snapshot, "source_count": len(snapshot["items"])}
 
 
 def capabilities() -> dict[str, Any]:

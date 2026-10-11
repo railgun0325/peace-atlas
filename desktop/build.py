@@ -39,7 +39,7 @@ PYTHON_RELEASE = "20261003"
 PLAYWRIGHT_VERSION = "1.59.0"
 CHROMIUM_REVISION = "1217"
 CHROMIUM_VERSION = "147.0.7727.15"
-ARTIFACT_SUFFIX = "-harness-candidate-20261010"
+ARTIFACT_SUFFIX = "-foundation-reuse-20261011"
 CHROMIUM_TARGETS = {
     "windows-x64": "win64", "macos-arm64": "mac-arm64", "macos-x64": "mac-x64",
 }

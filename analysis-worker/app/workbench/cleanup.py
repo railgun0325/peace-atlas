@@ -160,6 +160,8 @@ class CleanupRepository:
                 raise ValueError("采集或研究正在执行，请等待完成或先停止任务后再清理，避免同时重建资料。")
             if action == "purge":
                 self._remember_purged_sources(connection, rows)
+            if action in {"trash", "purge"}:
+                self.clear_public_source_cache([row['url'] for row in rows], _connection=connection)
             for row in rows:
                 if action == "purge":
                     self._execute(connection, "DELETE FROM wb_research_items WHERE item_id=?", (row["id"],))

@@ -14,9 +14,18 @@ from fastapi.testclient import TestClient
 from app.workbench import harness_runtime, pipeline
 from app.workbench.server import create_app
 from app.workbench.store import Store
+from app.workbench.report_inputs import capture_report_input_snapshot
 from test_workbench_harness_runtime import (
     QUOTE, REASONING, SYNTHETIC_KEY, fake_sidecar, final_findings, response,
 )
+
+
+def retry_report(client, job_id, options=None, *, input_mode="original"):
+    preview = client.get(f"/api/v2/jobs/{job_id}/retry-preview")
+    assert preview.status_code == 200, preview.text
+    source = preview.json()["original_input" if input_mode == "original" else "current_input"]
+    return client.post(f"/api/v2/jobs/{job_id}/retry", json={
+        "input_mode": input_mode, "input_sha256": source["sha256"], **(options or {})})
 
 
 @pytest.fixture(autouse=True)
@@ -158,7 +167,7 @@ def test_api_failed_draft_retry_reuses_reading_and_completed_harness_without_ext
         assert previous["complete"] is True and previous["harness_state"]["complete"] is True
         assert not previous["report_generation"]["complete"]
         assert store.list_reports()["total"] == 0
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
+        retried = retry_report(client, failed["id"])
         assert retried.status_code == 202, retried.text
         completed = terminal(client, retried.json()["id"])
         assert completed["status"] == "succeeded", completed
@@ -182,7 +191,7 @@ def test_api_retry_research_revision_change_invalidates_harness_and_reuses_uncha
         old_harness = failed["result"]["report_checkpoint"]["harness_state"]
         store.checkpoint_research(run["id"], status="succeeded", phase="finished",
             summary={"stop_reason": "manual_stop", "visited_count": 1})
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
+        retried = retry_report(client, failed["id"], input_mode="latest")
         assert retried.status_code == 202, retried.text
         completed = terminal(client, retried.json()["id"])
         assert completed["status"] == "succeeded", completed
@@ -241,7 +250,7 @@ def test_unknown_harness_citation_does_not_save_report_and_retry_keeps_source_re
         assert store.list_reports()["total"] == 0
         assert [kind for kind, _, _ in calls] == ["reading", "harness"]
         script_path.write_text(original_script, encoding="utf-8")
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
+        retried = retry_report(client, failed["id"])
         assert retried.status_code == 202, retried.text
         completed = terminal(client, retried.json()["id"])
         assert completed["status"] == "succeeded", completed
@@ -286,9 +295,15 @@ def ordinary_params():
         "include_news": True, "include_social": False}
 
 
-def create_failed_report(store, *, mode="ai"):
-    job = store.create_job("report", {**ordinary_params(), "mode": mode})
-    store.update_job(job["id"], status="failed", error="synthetic previous report failure")
+def create_failed_report(store, *, mode="ai", analysis_harness="off"):
+    parameters = {**ordinary_params(), "mode": mode, "analysis_harness": analysis_harness}
+    row = {**source(1), "type": "news", "source_type": "rss", "url": "https://public.example/frozen-fixture"}
+    row.pop("account_key")
+    store.import_items([row])
+    snapshot = asyncio.run(pipeline.prepare_report_input(store.report_items("2026-10-01", "2026-10-09"), parameters))
+    job = store.create_job("report", parameters)
+    store.update_job(job["id"], status="failed", error="synthetic previous report failure",
+        result={"report_input_snapshot": capture_report_input_snapshot(snapshot, parameters)})
     return store.get_job(job["id"])
 
 
@@ -327,7 +342,7 @@ def test_standard_failed_report_can_enable_dsh_on_retry_and_reuse_two_readings_p
         original_params = copy.deepcopy(failed["params"])
         overrides = {"analysis_harness": "dsh", "harness_max_model_calls": 6,
             "harness_max_tool_calls": 12, "time_budget_seconds": 1800}
-        retried = client.post(f"/api/v2/jobs/{failed['id']}/retry", json=overrides)
+        retried = retry_report(client, failed["id"], overrides)
         assert retried.status_code == 202, retried.text
         completed = terminal(client, retried.json()["id"])
         assert completed["status"] == "succeeded", completed
@@ -413,7 +428,7 @@ def test_retry_same_branch_queued_child_conflicts_without_second_child(monkeypat
     store = Store(tmp_path / "retry-queued-conflict.sqlite3")
     failed = create_failed_report(store)
     with TestClient(create_app(store, run_worker=False)) as client:
-        first = client.post(f"/api/v2/jobs/{failed['id']}/retry", json={"analysis_harness": "dsh"})
+        first = retry_report(client, failed["id"], {"analysis_harness": "dsh"})
         assert first.status_code == 202, first.text
         assert first.json()["status"] == "queued"
         second = client.post(f"/api/v2/jobs/{failed['id']}/retry", json={"analysis_harness": "off"})
@@ -431,28 +446,26 @@ def test_retry_dsh_unavailable_runtime_or_missing_key_rejects_without_new_jobs(m
     with TestClient(create_app(store, run_worker=False)) as client:
         with monkeypatch.context() as guard:
             guard.setattr(harness_runtime, "capability", lambda: {"id": "dsh", "available": False})
-            unavailable = client.post(f"/api/v2/jobs/{failed['id']}/retry", json={"analysis_harness": "dsh"})
+            unavailable = retry_report(client, failed["id"], {"analysis_harness": "dsh"})
             assert unavailable.status_code == 422, unavailable.text
         with monkeypatch.context() as guard:
             guard.setattr(harness_runtime, "capability", lambda: {"id": "dsh", "available": True})
             guard.delenv("DEEPSEEK_API_KEY", raising=False)
-            missing_key = client.post(f"/api/v2/jobs/{failed['id']}/retry", json={"analysis_harness": "dsh"})
+            missing_key = retry_report(client, failed["id"], {"analysis_harness": "dsh"})
             assert missing_key.status_code == 422, missing_key.text
     assert store.list_jobs()["total"] == 1
 
 
-def test_legacy_no_body_retry_preserves_existing_standard_params_and_lineage(monkeypatch, tmp_path):
+def test_saved_input_no_body_retry_requires_free_preview_sha_without_child(monkeypatch, tmp_path):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     monkeypatch.setattr(harness_runtime, "capability", lambda: {"id": "dsh", "available": False})
     store = Store(tmp_path / "legacy-no-body-retry.sqlite3")
     failed = create_failed_report(store)
     with TestClient(create_app(store, run_worker=False)) as client:
         retried = client.post(f"/api/v2/jobs/{failed['id']}/retry")
-        assert retried.status_code == 202, retried.text
-    params = retried.json()["params"]
-    assert {key: value for key, value in params.items() if key != "_workbench_retry"} == failed["params"]
-    assert params["_workbench_retry"] == {"parent_job_id": failed["id"], "root_job_id": failed["id"]}
-    assert store.list_jobs()["total"] == 2
+        assert retried.status_code == 409, retried.text
+    assert store.get_job(failed["id"])["params"] == failed["params"]
+    assert store.list_jobs()["total"] == 1
 
 
 def test_retry_cannot_enable_dsh_for_evidence_mode_even_when_provider_ready(monkeypatch, tmp_path):
@@ -467,8 +480,7 @@ def test_retry_cannot_enable_dsh_for_evidence_mode_even_when_provider_ready(monk
 
 def test_existing_dsh_retry_checks_effective_runtime_for_no_body_and_budget_only(monkeypatch, tmp_path):
     store = Store(tmp_path / "retry-inherited-dsh-readiness.sqlite3")
-    failed = store.create_job("report", {**ordinary_params(), "analysis_harness": "dsh"})
-    store.update_job(failed["id"], status="failed", error="synthetic previous DSH failure")
+    failed = create_failed_report(store, analysis_harness="dsh")
     with TestClient(create_app(store, run_worker=False)) as client:
         for availability in ("runtime_missing", "key_missing"):
             with monkeypatch.context() as guard:
@@ -477,15 +489,15 @@ def test_existing_dsh_retry_checks_effective_runtime_for_no_body_and_budget_only
                 if availability == "key_missing":
                     guard.delenv("DEEPSEEK_API_KEY", raising=False)
                 for options in (None, {"harness_max_model_calls": 6}):
-                    url = f"/api/v2/jobs/{failed['id']}/retry"
-                    rejected = client.post(url) if options is None else client.post(url, json=options)
+                    rejected = retry_report(client, failed["id"], options)
                     assert rejected.status_code == 422, (availability, options, rejected.text)
                     assert store.list_jobs()["total"] == 1
         # Retrying an older off ancestor selects the latest failed dsh child.
         # Readiness must follow that effective branch, not the clicked job.
         ready_runtime(monkeypatch)
         ancestor = create_failed_report(store)
-        child = store.retry_job(ancestor["id"], report_options={"analysis_harness": "dsh"})
+        child = store.retry_job(ancestor["id"], report_options={"analysis_harness": "dsh",
+            "input_sha256": ancestor["result"]["report_input_snapshot"]["sha256"]})
         store.update_job(child["id"], status="failed", error="synthetic child DSH failure")
         assert store.get_job(ancestor["id"])["params"]["analysis_harness"] == "off"
         assert store.list_jobs()["total"] == 3
@@ -496,7 +508,6 @@ def test_existing_dsh_retry_checks_effective_runtime_for_no_body_and_budget_only
                 if availability == "key_missing":
                     guard.delenv("DEEPSEEK_API_KEY", raising=False)
                 for options in (None, {"time_budget_seconds": 240}):
-                    url = f"/api/v2/jobs/{ancestor['id']}/retry"
-                    rejected = client.post(url) if options is None else client.post(url, json=options)
+                    rejected = retry_report(client, ancestor["id"], options)
                     assert rejected.status_code == 422, (availability, options, rejected.text)
                     assert store.list_jobs()["total"] == 3

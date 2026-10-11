@@ -4,6 +4,33 @@ import { el, button, field, dialog, setContent, loading, errorBox, notify, numbe
 const kinds = { accounts: '账号类型与身份核验', claims: '关系主张', activities: '活动与举办地' };
 const outcomes = { organization: '组织', individual: '个人', unknown: '类型证据不足', confirmed: '已确认', rejected: '已排除', inconclusive: '证据不足' };
 const phases = { starting: '准备范围', investigating: 'DS 正在阅读与查找依据', saving: '保存本批决定', verifying_accounts: '程序核对准确账号回链', complete: '审核流程已完成' };
+const sourceCacheModes = [['reuse', '复用有效期内已保存来源（默认）'], ['refresh', '强制刷新'], ['off', '本次关闭']];
+const sourceCacheTTL = 3600;
+
+function sourceCacheResults(cache) {
+  if (!cache || typeof cache !== 'object') return null;
+  const count = key => Number.isSafeInteger(cache[key]) && cache[key] >= 0 ? `${number(cache[key])} 次` : '未记录';
+  const ttl = cache.ttl_seconds;
+  const duration = Number.isSafeInteger(ttl) && ttl > 0 ? ttl % 3600 === 0 ? `${number(ttl / 3600)} 小时` : ttl % 60 === 0 ? `${number(ttl / 60)} 分钟` : `${number(ttl)} 秒` : '未记录';
+  const time = value => typeof value === 'string' && value.trim() && Number.isFinite(new Date(value).getTime())
+    ? new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value)) : '时间未记录';
+  const mode = { reuse: '复用有效期内已保存来源', refresh: '强制刷新', off: '本次关闭' }[cache.mode];
+  const captures = Array.isArray(cache.captures) ? cache.captures.slice(0, 32).filter(row => row && typeof row === 'object') : [];
+  const truncated = Number.isSafeInteger(cache.capture_receipts_truncated) && cache.capture_receipts_truncated > 0 ? cache.capture_receipts_truncated : 0;
+  return el('section', { class: 'review-source-cache', 'aria-label': '来源读取与复用' },
+    el('h4', {}, '来源读取与复用'),
+    el('p', {}, `${mode ? `${mode} · ` : ''}有效期 ${duration}`),
+    el('p', {}, `跨任务复用 ${count('persistent_hits')} · 本任务内复用 ${count('run_hits')} · 成功新读取 ${count('successful_fetches')} · 新读取请求 ${count('fetch_calls')}`),
+    el('p', { class: 'field-hint' }, '复用的是原捕获时间保存的内容，不等于现场新读取。请求次数包含失败；成功新读取只计完成提取的新捕获。目标账号仍需按自身公开回链核验，不能沿用其他账号的身份结论。'),
+    cache.mode === 'refresh' && el('p', { class: 'field-hint' }, '本次跳过跨任务缓存读取，新捕获可保存供后续复用；本任务内仍可复用已读取内容。'),
+    cache.mode === 'off' && el('p', { class: 'field-hint' }, '不读取或保存跨任务缓存；本任务内仍可复用已读取内容。'),
+    (captures.length > 0 || truncated > 0) && el('details', {}, el('summary', {}, `查看 ${number(captures.length)} 条来源捕获记录`),
+      el('p', { class: 'field-hint' }, '以下为当次读取记录的捕获及有效期时间（日本时间），不表示来源现在仍有效。'),
+      el('ol', { class: 'relation-list' }, captures.map(row => el('li', {}, sourceLink(row.source_url, '查看来源'),
+        el('p', {}, { persistent: '复用保存内容', network: '本次新读取' }[row.first_read_via] || '读取方式未记录'),
+        el('p', {}, `捕获 ${time(row.captured_at)} · 有效期至 ${time(row.expires_at)}`)))),
+      truncated > 0 && el('p', { class: 'field-hint' }, `另有 ${number(truncated)} 条捕获记录未展示；以上读取统计仍包含全部记录。`)));
+}
 
 export function reviewProgress(result = {}) {
   result = result || {};
@@ -15,6 +42,7 @@ export function reviewResults(result = {}) {
   return el('section', { class: 'review-results' }, el('h3', {}, '自动审核与核验结果'), el('p', { role: 'status' }, reviewProgress(result)),
     el('p', { class: 'field-hint' }, '已完成表示全部指定内容已有审核结果。证据不足不等于属实；身份核验、账号类型、关系主张分别记录。原始资料保留，人工锁定类型不会被覆盖。'),
     el('p', {}, Object.entries(result.outcomes || {}).map(([key, value]) => `${outcomes[key] || key} ${number(value)}`).join(' · ')),
+    sourceCacheResults(result.source_cache),
     el('ol', { class: 'relation-list' }, (result.results || []).map(row => el('li', {},
       el('details', {}, el('summary', {}, `${kinds[row.kind] || row.kind} · ${outcomes[row.outcome] || row.outcome} · ${row.label || row.id.slice(0, 12)}`),
         el('p', {}, row.note), row.date && el('p', {}, `实际日期 ${row.date} · 举办地 ${row.prefecture || '无法定位'}`),
@@ -29,6 +57,8 @@ export function openAutoReview(ctx) {
   });
   const batch = field('每批记录数', { name: 'review_batch_size', type: 'number', value: 16, min: 1, max: 40,
     hint: '决定一次 DS 调查处理多少记录，默认 16。不是任务总量上限；全部所选记录会依次处理。' });
+  const sourceCache = field('来源读取方式', { name: 'source_cache_mode', value: 'reuse', options: sourceCacheModes,
+    hint: '默认复用 1 小时内成功保存的来源；超过有效期重新读取。复用不等于现场新读取，目标账号仍须独立核验。强制刷新跳过跨任务复用；本次关闭不读取或保存跨任务缓存。各方式均可复用本任务内已读取内容。' });
   const recheck = el('input', { type: 'checkbox' });
   const network = el('input', { type: 'checkbox', checked: true });
   const preview = el('div'), errors = el('div');
@@ -45,9 +75,9 @@ export function openAutoReview(ctx) {
   });
   start.disabled = true;
   const invalidate = () => { version++; proof = null; start.disabled = true; setContent(preview); };
-  [...checks.map(row => row.input), recheck, network, batch.querySelector('input')].forEach(input => input.addEventListener('change', invalidate));
+  [...checks.map(row => row.input), recheck, network, batch.querySelector('input'), sourceCache.querySelector('select')].forEach(input => input.addEventListener('change', invalidate));
   modal.body.append(el('p', {}, '让已配置的 DeepSeek 通过 DSH 工具调查保存材料、查找独立公开出处、核对原文摘录，再批量保存结论。每批保存审核结果与进度；原始内容保留。'),
-    ...checks.map(row => row.node), batch, el('label', { class: 'checkbox' }, recheck, '重新审核已有结论（人工锁定类型仍保留）'),
+    ...checks.map(row => row.node), batch, sourceCache, el('label', { class: 'checkbox' }, recheck, '重新审核已有结论（人工锁定类型仍保留）'),
     el('label', { class: 'checkbox' }, network, '允许读取与搜索独立公开网页，并执行准确回链核验'), preview, errors);
   modal.footer.append(button('取消', modal.close, 'secondary'), button('预估范围与用时', async event => {
     if (busy) return;
@@ -55,7 +85,8 @@ export function openAutoReview(ctx) {
     proof = null; start.disabled = true; control.disabled = true; setContent(errors); setContent(preview, loading('正在统计待审内容…'));
     try {
       const input = batch.querySelector('input'); if (!input.reportValidity()) throw new Error('每批记录数需要 1 至 40。');
-      values = { kinds: checks.filter(row => row.input.checked).map(row => row.key), batch_size: Number(input.value), recheck: recheck.checked, use_public_network: network.checked };
+      values = { kinds: checks.filter(row => row.input.checked).map(row => row.key), batch_size: Number(input.value), recheck: recheck.checked, use_public_network: network.checked,
+        source_cache_mode: sourceCache.querySelector('select').value, source_cache_ttl_seconds: sourceCacheTTL };
       if (!values.kinds.length) throw new Error('请至少选择一个审核范围。');
       const estimate = await api('reviews/estimate', { method: 'POST', body: values, signal: controller.signal });
       if (mine !== version || controller.signal.aborted) return;

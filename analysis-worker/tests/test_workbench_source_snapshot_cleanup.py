@@ -173,7 +173,7 @@ def test_source_freeze_and_purge_markers_survive_complete_table_backup_restore(s
     store.import_items([{**material, "content": "Corrected news body"}])
     with sqlite3.connect(store.path) as original, sqlite3.connect(tmp_path / "before-cleanup.sqlite3") as backup:
         original.backup(backup)
-        assert original.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE 'wb_%'").fetchone()[0] == 22
+        assert original.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name LIKE 'wb_%'").fetchone()[0] == 23
     restored_dir = tmp_path / "restored"
     prepare_restore(tmp_path / "before-cleanup.sqlite3", restored_dir)
     restored = Store(restored_dir / "workbench.sqlite3")

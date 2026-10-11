@@ -458,37 +458,103 @@ export async function openReportCreate(ctx, { run = null } = {}) {
 }
 
 export async function openReportRetry(ctx, job, { onCreated = () => {} } = {}) {
-  const modal = dialog('调整分析方式并续跑', { subtitle: 'REPORT / PRESERVED SOURCES' });
+  const modal = dialog('免费预览报告续跑', { subtitle: 'REPORT / INPUT & SAVED PROGRESS' });
   const original = job.params || {};
-  let ready = false, configured = false;
+  const isAI = original.mode === 'ai';
+  let ready = false, configured = !isAI, preview = null, previewVersion = 0, previewBusy = false, creating = false;
+  const controller = new AbortController();
+  const relay = () => controller.abort(ctx.signal?.reason);
+  if (ctx.signal?.aborted) relay();
+  ctx.signal?.addEventListener('abort', relay, { once: true });
+  modal.modal.addEventListener('close', () => { controller.abort(); ctx.signal?.removeEventListener('abort', relay); }, { once: true });
   const { form, add } = actionForm(modal, '创建报告续跑任务', async values => {
+    const mode = values.input_mode;
+    const input = mode === 'original' ? preview?.original_input : mode === 'latest' ? preview?.current_input : null;
+    if (creating || previewBusy || !validInput(input)) throw new Error('所选输入尚未通过免费预览，请重新预览或明确选择可用输入。');
     const minutes = Number(values.report_minutes), modelCalls = Number(values.harness_max_model_calls), toolCalls = Number(values.harness_max_tool_calls);
-    const harness = values.analysis_harness === 'dsh';
+    const harness = isAI && values.analysis_harness === 'dsh';
     if (!Number.isSafeInteger(minutes) || minutes < 0 || minutes > 43200) throw new Error('最长运行时间须为 0 至 43200 分钟的整数；0 表示按保存材料范围完成。');
+    if (isAI && !configured) throw new Error('AI 连接必须就绪后才能续跑。');
     if (harness && (!ready || !configured)) throw new Error('DSH 运行工具和 AI 连接必须就绪后才能续跑。');
     if (harness && (!Number.isSafeInteger(modelCalls) || (modelCalls !== 0 && modelCalls < 2) || modelCalls > 4096 || !Number.isSafeInteger(toolCalls) || (toolCalls !== 0 && toolCalls < 2) || toolCalls > 65536)) throw new Error('工具分析决策轮数须为 0 或 2 至 4096，工具调用数须为 0 或 2 至 65536；0 表示不额外按次数截断。');
-    const result = await api(`jobs/${pathId(job.id)}/retry`, { method: 'POST', body: { report_options: {
-      analysis_harness: harness ? 'dsh' : 'off', time_budget_seconds: minutes * 60,
-      ...(harness ? { harness_max_model_calls: modelCalls, harness_max_tool_calls: toolCalls } : {}) } } });
-    if (!result.id) throw new Error('服务尚未确认续跑任务，请刷新任务中心检查。');
-    modal.close(); onCreated(result); notify('已创建报告续跑任务，成功阅读且原文未变的批次会复用。'); ctx.navigate('jobs', { selected: result.id });
-  });
+    creating = true; update();
+    try {
+      const result = await api(`jobs/${pathId(job.id)}/retry`, { method: 'POST', signal: controller.signal, body: {
+        input_mode: mode, input_sha256: input.sha256, ...(isAI ? { analysis_harness: harness ? 'dsh' : 'off' } : {}), time_budget_seconds: minutes * 60,
+        ...(harness ? { harness_max_model_calls: modelCalls, harness_max_tool_calls: toolCalls } : {}) } });
+      if (!result.id) throw new Error('服务尚未确认续跑任务，请刷新任务中心检查。');
+      if (controller.signal.aborted || !modal.modal.isConnected) return;
+      modal.close(); onCreated(result); notify(mode === 'original' ? '已创建原输入报告续跑任务；保存阶段将在执行时验证是否可复用。' : '已按最新审核上下文创建报告任务；仅完全匹配的已保存阅读片段可候选复用。'); ctx.navigate('jobs', { selected: result.id });
+    } catch (error) {
+      if ([409, 422, 'request_error', 'validation_error'].includes(error.code)) { preview = null; setContent(previewView, el('p', { class: 'warning-note' }, '预览已失效，请重新免费预览后再确认输入。')); }
+      throw error;
+    } finally { creating = false; update(); }
+  }, () => update());
+  const inputMode = field('续跑使用的输入', { name: 'input_mode', value: 'original', options: [['original', '原输入续跑'], ['latest', '使用最新审核上下文重新生成']],
+    hint: '默认保留原输入。原快照不可用时不会自动改用最新输入；请阅读影响后明确选择。' });
   const harness = field('AI 调查方式', { name: 'analysis_harness', value: original.analysis_harness === 'dsh' ? 'dsh' : 'off', options: [['off', '标准分析 · 逐条阅读与报告复核'], ['dsh', 'DSH 工具分析 · 主动查证与比较']] });
   const limits = el('div', { class: 'form-grid' }, field('最多 AI 决策轮数', { name: 'harness_max_model_calls', type: 'number', value: String(original.harness_max_model_calls ?? 24), min: 0, max: 4096, step: 1 }), field('最多工具调用数', { name: 'harness_max_tool_calls', type: 'number', value: String(original.harness_max_tool_calls ?? 64), min: 0, max: 65536, step: 1 }));
-  const info = el('p', { class: 'field-hint report-retry-readiness' }, '正在检查运行工具与 AI 连接…');
-  add(el('p', { class: 'intro' }, '沿用原任务的研究目标、日期与材料范围。仅调整分析方式和运行上限；成功阅读的材料保留，原文变化时重新核对。'), el('p', { class: 'field-hint' }, `${original.title || '研究报告'} · ${original.start_date || '未指定'} — ${original.end_date || '未指定'} · 日本时间 UTC+9`), harness, limits, field('最长运行时间（分钟）', { name: 'report_minutes', type: 'number', value: String(Math.max(0, Math.ceil((original.time_budget_seconds ?? 0) / 60))), min: 0, max: 43200, step: 1, hint: '0 表示不按总时长提前停止。决策与工具次数是技术运行上限，不是费用额度。' }), info);
-  const update = () => { const enabled = harness.querySelector('select').value === 'dsh'; for (const name of ['harness_max_model_calls', 'harness_max_tool_calls']) form.elements[name].disabled = !enabled; };
-  harness.querySelector('select').addEventListener('change', update); update();
+  harness.hidden = !isAI; limits.hidden = !isAI;
+  const previewView = el('section', { class: 'report-retry-preview result-box', 'aria-live': 'polite' });
+  const info = el('p', { class: 'field-hint report-retry-readiness' }, isAI ? '正在检查运行工具与 AI 连接…' : '证据整理模式不调用模型。');
+  const refresh = button('重新免费预览', () => refreshPreview(), 'secondary small');
+  add(el('p', { class: 'intro' }, '先免费检查输入变化与保存进度，再确认续跑方式。预览不调用模型，也不读取公开网络；不会创建任务。'), el('p', { class: 'field-hint' }, `${original.title || '研究报告'} · ${original.start_date || '未指定'} — ${original.end_date || '未指定'} · 日本时间 UTC+9`), inputMode, refresh, previewView, harness, limits,
+    field('最长运行时间（分钟）', { name: 'report_minutes', type: 'number', value: String(Math.max(0, Math.ceil((original.time_budget_seconds ?? 0) / 60))), min: 0, max: 43200, step: 1, hint: '0 表示不按总时长提前停止。决策与工具次数是技术运行上限，不是费用额度。' }), info);
   const submitButton = form.querySelector('button[type=submit]'); submitButton.disabled = true;
-  try {
-    const caps = await api('capabilities', { signal: ctx.signal }); if (!modal.modal.isConnected) return;
-    ready = caps.analysis_harness?.available === true; configured = caps.llm?.configured === true;
-    harness.querySelector('option[value=dsh]').disabled = !ready || !configured;
-    if (!ready || !configured) harness.querySelector('select').value = 'off';
-    if (ready && configured && original.analysis_harness !== 'dsh') harness.querySelector('select').value = 'dsh';
-    info.textContent = configured ? (ready ? 'AI 连接与 DSH 工具已就绪。续跑会先完成剩余阅读，再继续工具调查与报告复核。' : 'DSH 工具尚未安装，可选择标准分析。') : 'AI 连接尚未就绪，请先在能力与设置中保存连接。';
-    submitButton.disabled = !configured; update();
-  } catch (error) { info.replaceChildren(errorBox(error)); }
+  const validInput = input => input?.available === true && typeof input.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(input.sha256);
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? number(value) : '未知';
+  const update = () => {
+    const enabled = isAI && harness.querySelector('select').value === 'dsh';
+    for (const name of ['harness_max_model_calls', 'harness_max_tool_calls']) form.elements[name].disabled = !enabled;
+    const mode = inputMode.querySelector('select').value;
+    const input = mode === 'original' ? preview?.original_input : mode === 'latest' ? preview?.current_input : null;
+    submitButton.disabled = creating || previewBusy || !validInput(input) || !configured || (enabled && !ready);
+    refresh.disabled = creating || previewBusy;
+    inputMode.querySelector('select').disabled = creating;
+  };
+  const drawPreview = () => {
+    if (!preview) return;
+    const mode = inputMode.querySelector('select').value, selected = mode === 'latest' ? preview.current_input : preview.original_input;
+    const changes = preview.changes || {}, reuse = preview.reading_reuse || {}, stages = preview.stage_reuse?.[mode] || {};
+    const stageNames = { reading: '逐条阅读', harness: 'DSH 调查', draft: '综合草稿', compression: '综合压缩' };
+    const stageLabels = { requires_runtime_validation: '候选复用，运行时再验证', matching_fragments_only: '仅复用完全匹配的片段', invalidated: '完整上下文已变化，重新执行', not_saved: '未保存，需执行', unavailable: '不可用' };
+    const cost = { resume_candidate_requires_runtime_validation: '最新输入与保存输入一致；各阶段仍需运行时验证。', new_analysis_with_matching_readings_only: '最新输入需要新的分析，仅完全匹配的已保存阅读片段可候选复用。', unavailable: '当前输入不可用于重新生成，请查看不可用原因。' }[preview.cost_level] || '费用影响尚未确定。';
+    for (const [value, input] of [['original', preview.original_input], ['latest', preview.current_input]]) inputMode.querySelector(`option[value=${value}]`).disabled = !validInput(input);
+    setContent(previewView,
+      el('p', {}, `原输入 ${count(preview.original_input?.source_count)} 条来源 · 当前输入 ${count(preview.current_input?.source_count)} 条来源`),
+      !validInput(preview.original_input) && el('p', { class: 'warning-note' }, `原输入不可用：${preview.original_input?.reason || '完整快照或校验标识不可用，请重新免费预览。'}`),
+      !validInput(preview.current_input) && el('p', { class: 'warning-note' }, `最新输入不可用：${preview.current_input?.reason || '当前来源或校验标识不可用，请重新免费预览。'}`),
+      el('p', {}, changes.compared_to === 'unknown_original' ? '原输入不可比较，变更数量未知。' : `来源变更 ${count(changes.source_count)} 条 · 账号变更 ${count(changes.account_count)} 个 · 主张变更 ${count(changes.claim_count)} 条（各自包括新增、移除与修改）`),
+      el('p', {}, mode === 'latest' ? '使用最新审核上下文重新生成；保留原任务的目标和日期，更新当前来源、账号与主张上下文。已有报告记录保留。' : '原输入续跑保留完整保存的来源和审核上下文；后来发生的审核变更不会自动带入本次续跑。'),
+      !validInput(selected) && el('p', { class: 'warning-note' }, '当前选择不能续跑。请重新预览，或明确选择另一个可用输入；不会自动切换。'),
+      mode === 'latest' && el('p', {}, `最新输入的候选阅读复用：匹配 ${count(reuse.matched)} / ${count(reuse.total)} 个片段 · 待阅读 ${count(reuse.pending)} 个片段。原文指纹及引用完全一致才可复用；真实性需独立核验，费用以实际请求为准。`),
+      isAI && el('ul', {}, Object.entries(stageNames).map(([key, label]) => el('li', {}, `${label}：${key === 'harness' && harness.querySelector('select').value !== 'dsh' ? '本次未选择工具调查' : stageLabels[stages[key]] || '未记录，需运行时验证'}`))),
+      mode === 'latest' && el('p', { class: 'field-hint' }, cost),
+      isAI && el('p', { class: 'field-hint' }, '续跑可能继续调用模型，费用按实际请求产生；保存阶段需运行时验证，不保证免除后续模型费用。'));
+    update();
+  };
+  const refreshPreview = async () => {
+    if (creating || controller.signal.aborted) return;
+    const version = ++previewVersion; preview = null; previewBusy = true; update(); setContent(form.querySelector('.form-error')); setContent(previewView, el('p', {}, '正在免费检查输入与保存进度…'));
+    try {
+      const result = await api(`jobs/${pathId(job.id)}/retry-preview`, { signal: controller.signal });
+      if (controller.signal.aborted || !modal.modal.isConnected || version !== previewVersion) return;
+      if (result.kind !== 'report' || !result.original_input || !result.current_input) throw new Error('服务尚未返回完整报告续跑预览，请刷新后重试。');
+      preview = result; drawPreview();
+    } catch (error) { if (!controller.signal.aborted && modal.modal.isConnected && version === previewVersion) setContent(previewView, errorBox(error)); }
+    finally { if (version === previewVersion) { previewBusy = false; update(); } }
+  };
+  inputMode.querySelector('select').addEventListener('change', () => { drawPreview(); update(); });
+  harness.querySelector('select').addEventListener('change', () => { drawPreview(); update(); }); update();
+  await Promise.allSettled([refreshPreview(), ...(isAI ? [(async () => {
+    try {
+      const caps = await api('capabilities', { signal: controller.signal }); if (controller.signal.aborted || !modal.modal.isConnected) return;
+      ready = caps.analysis_harness?.available === true; configured = caps.llm?.configured === true;
+      harness.querySelector('option[value=dsh]').disabled = !ready || !configured;
+      info.textContent = configured ? (ready ? 'AI 连接与 DSH 工具已就绪。保存阶段能否复用会在实际续跑时验证。' : 'DSH 工具尚未安装，可明确选择标准分析。') : 'AI 连接尚未就绪，请先在能力与设置中保存连接。';
+    } catch (error) { if (!controller.signal.aborted && modal.modal.isConnected) info.replaceChildren(errorBox(error)); }
+    finally { update(); }
+  })()] : [])]);
 }
 
 export function openAccountEdit(ctx, account = null) {

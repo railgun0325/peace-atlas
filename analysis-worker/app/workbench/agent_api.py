@@ -166,13 +166,25 @@ class AgentAccess:
             raise HTTPException(401, "请先在桌面菜单明确授权外部 Agent，或重新授权已过期的连接。")
         return grant
 
-    def require_scope(self, grant, operation):
+    def require_scope(self, grant, operation, arguments=None):
         if operation not in self.operations:
             raise HTTPException(404, "未开放该 Agent 操作。")
-        scope = self.operations[operation]["scope"]
+        spec = self.operations[operation]
+        scope = spec["scope"]
+        if operation in {"job.cancel", "job.retry"}:
+            if not {"run", "review"}.intersection(grant["scopes"]):
+                raise HTTPException(403, "本次授权不包含此操作的权限。")
+            identity = RecordArgs.model_validate({"id": (arguments or {}).get("id")}).id
+            job = self.app.state.store.get_job(identity)
+            if job is None:
+                raise HTTPException(404, "任务不存在。")
+            if job["kind"] not in {"collect", "research", "report"}:
+                raise HTTPException(403, "Agent 不能操作登录或会话任务。")
+            if job["kind"] == "collect" and job["params"].get("_evidence_review") is True:
+                scope = "review"
         if scope not in grant["scopes"]:
             raise HTTPException(403, "本次授权不包含此操作的权限。")
-        return self.operations[operation]
+        return {**spec, "scope": scope}
 
     async def invoke(self, method, path, *, body=None, query=None):
         # No arbitrary URL/path input is accepted. The desktop token stays only
@@ -219,9 +231,9 @@ class AgentAccess:
         if operation == "query.plan":
             return await self.invoke("POST", path, body=args)
         result = await self.invoke("GET", path, query={k: v for k, v in args.items() if k != "id"})
-        if result.status_code < 400 and operation in {"job.get", "jobs.list"}:
+        if result.status_code < 400 and operation in {"job.get", "job.retry_preview", "jobs.list"}:
             value = json.loads(result.body)
-            if operation == "job.get" and value.get("kind") not in {"collect", "research", "report"}:
+            if operation in {"job.get", "job.retry_preview"} and value.get("kind") not in {"collect", "research", "report"}:
                 raise HTTPException(403, "Agent 不能读取登录或会话任务。")
             if operation == "jobs.list":
                 value["items"] = [x for x in value.get("items", []) if x.get("kind") in {"collect", "research", "report"}]
@@ -247,6 +259,8 @@ class AgentAccess:
             job = json.loads(result.body)
             if job["kind"] not in {"collect", "research", "report"}:
                 raise HTTPException(403, "Agent 不能操作登录或会话任务。")
+            if operation == "job.retry" and job["kind"] == "report":
+                return await self.invoke("GET", f"/api/v2/jobs/{args['id']}/retry-preview")
             return JSONResponse({"job_id": job["id"], "kind": job["kind"], "status": job["status"],
                                  "saved_params": job["params"], "result": job.get("result"),
                                  "may_use_model": job["kind"] == "report" or job["params"].get("analysis_mode") != "rules"})
@@ -270,8 +284,13 @@ class AgentAccess:
                                      body={**args["limits"], "preview_token": proof["preview_token"]})
         if operation in {"job.cancel", "job.retry"}:
             action = operation.split(".")[1]
+            options = args.get("options")
+            if action == "retry" and proof.get("kind") == "report":
+                options = dict(options or {})
+                mode = options.get("input_mode", "original")
+                options.setdefault("input_sha256", (proof.get("original_input" if mode == "original" else "current_input") or {}).get("sha256"))
             return await self.invoke("POST", f"/api/v2/jobs/{args['id']}/{action}",
-                                     body=args.get("options") if action == "retry" else None)
+                                     body=options if action == "retry" else None)
         if operation == "items.cleanup":
             return await self.invoke("POST", "/api/v2/items/cleanup/apply",
                                      body={**args, "preview_digest": proof["preview_digest"]})
@@ -291,6 +310,7 @@ def register_agent_api(app):
         "accounts.list": {"scope": "read", "model": EmptyArgs, "path": "/api/v2/accounts"},
         "jobs.list": {"scope": "read", "model": PageArgs, "path": "/api/v2/jobs"},
         "job.get": {"scope": "read", "model": RecordArgs, "path": "/api/v2/jobs/{id}"},
+        "job.retry_preview": {"scope": "read", "model": RecordArgs, "path": "/api/v2/jobs/{id}/retry-preview"},
         "reports.list": {"scope": "read", "model": PageArgs, "path": "/api/v2/reports"},
         "report.get": {"scope": "read", "model": RecordArgs, "path": "/api/v2/reports/{id}"},
         "research.list": {"scope": "read", "model": PageArgs, "path": "/api/v2/research"},
@@ -413,6 +433,8 @@ def register_agent_api(app):
                 shape["properties"]["use_ai"] = {"type": "boolean", "const": False, "default": False}
             operations[name] = {"scope": spec["scope"], "mutates": spec["scope"] != "read",
                                 "arguments": shape}
+            if name in {"job.cancel", "job.retry"}:
+                operations[name]["scope_by_job"] = {"evidence_review": "review", "other_business": "run"}
         return {"protocol": 1, "operations": operations,
                 "read_endpoint": "/agents/v1/read", "preview_endpoint": "/agents/v1/preview",
                 "execute_endpoint": "/agents/v1/execute", "preview_ttl_seconds": PREVIEW_TTL,
@@ -422,7 +444,7 @@ def register_agent_api(app):
     @router.post("/agents/v1/read")
     async def read_operation(request: Request, payload: OperationRequest):
         grant = access.authorize(request)
-        spec = access.require_scope(grant, payload.operation)
+        spec = access.require_scope(grant, payload.operation, payload.arguments)
         if spec["scope"] != "read":
             raise HTTPException(409, "该操作需要预览与确认。")
         args = access.normalize(payload.operation, payload.arguments)
@@ -431,7 +453,7 @@ def register_agent_api(app):
     @router.post("/agents/v1/preview")
     async def preview_operation(request: Request, payload: OperationRequest):
         grant = access.authorize(request)
-        spec = access.require_scope(grant, payload.operation)
+        spec = access.require_scope(grant, payload.operation, payload.arguments)
         if spec["scope"] == "read":
             raise HTTPException(422, "查询操作请使用 read。")
         args = access.normalize(payload.operation, payload.arguments)
@@ -453,7 +475,7 @@ def register_agent_api(app):
     @router.post("/agents/v1/execute")
     async def execute_operation(request: Request, payload: ExecuteRequest):
         grant = access.authorize(request)
-        spec = access.require_scope(grant, payload.operation)
+        spec = access.require_scope(grant, payload.operation, payload.arguments)
         if spec["scope"] == "read":
             raise HTTPException(422, "查询操作请使用 read。")
         args = access.normalize(payload.operation, payload.arguments)

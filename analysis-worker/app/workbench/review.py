@@ -87,6 +87,8 @@ class AutoReviewArgs(Strict):
     batch_size: int = Field(default=16, ge=1, le=40, strict=True)
     recheck: bool = False
     use_public_network: bool = True
+    source_cache_mode: Literal['reuse', 'refresh', 'off', 'shadow'] = 'reuse'
+    source_cache_ttl_seconds: int = Field(default=3600, ge=1, le=86400, strict=True)
 
     @model_validator(mode='after')
     def unique(self):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import time
 from datetime import datetime, timezone
@@ -418,8 +419,15 @@ class JobRunner:
             return await self._research(job)
         if job["kind"] == "report":
             self.store.update_job(jid, progress=10)
+            from .report_inputs import resolve_report_input
+            frozen_input = await asyncio.to_thread(resolve_report_input, self.store, job)
+            input_state = {"value": frozen_input}
             research_context = None
-            if params.get("research_run_id"):
+            if frozen_input is not None:
+                material = []
+                research_context = frozen_input["snapshot"].get("research_context")
+                self.store.add_job_event(jid, "沿已校验的完整报告输入快照继续；来源与审核上下文固定，后续阶段仍须通过各自指纹和证据校验。")
+            elif params.get("research_run_id"):
                 from .research_reports import prepare_research_report
                 exported = await asyncio.to_thread(self.store.export_research, params["research_run_id"])
                 material, research_context = prepare_research_report(exported)
@@ -427,10 +435,11 @@ class JobRunner:
             else:
                 material = await asyncio.to_thread(self.store.report_items, params["start_date"], params["end_date"],
                     params.get("include_news", True), params.get("include_social", True))
-            self.store.add_job_event(jid, f"选中 {len(material)} 条资料，正在构建可追溯的来源快照。")
+            source_count = len(frozen_input["snapshot"]["items"]) if frozen_input else len(material)
+            self.store.add_job_event(jid, f"选中 {source_count} 条资料，正在构建可追溯的来源快照。")
             self.store.update_job(jid, progress=35)
             capture_diagnostics = []
-            if params.get("read_original", False) and not research_context:
+            if params.get("read_original", False) and not research_context and frozen_input is None:
                 from .news_reader import capture_sources
                 self.store.add_job_event(jid, "尝试读取可直接访问的出版方公开正文；聚合器地址和失败摘要分别标明。")
                 enriched, capture_diagnostics = await capture_sources(material)
@@ -455,9 +464,23 @@ class JobRunner:
             parent = self.store.get_job(parent_id) if parent_id else None
             from .job_retries import report_resume_checkpoint
             previous_review = report_resume_checkpoint(params, parent, self.store.get_job)
+            async def checkpoint_input(value):
+                input_state["value"] = copy.deepcopy(value)
+                prior = self.store.get_job(jid).get("result") or {}
+                saving = asyncio.create_task(asyncio.to_thread(self.store.update_job, jid,
+                    result={**prior, "report_input_snapshot": value, "research_run_id": params.get("research_run_id", "")}))
+                try:
+                    await asyncio.shield(saving)
+                except asyncio.CancelledError:
+                    await saving
+                    raise
+                if self.store.get_job(jid).get("cancel_requested"):
+                    raise CancelledByUser()
             async def checkpoint_review(state):
                 counts = state["coverage_progress"]
                 result = {"report_checkpoint": state, "research_run_id": params.get("research_run_id", "")}
+                if input_state["value"] is not None:
+                    result["report_input_snapshot"] = copy.deepcopy(input_state["value"])
                 note_detail = report_note_progress(state)
                 synthesis_progress = note_detail["progress"] if note_detail else {}
                 generation = state.get("report_generation") or {}
@@ -489,6 +512,7 @@ class JobRunner:
             report_options = ({"research_context": research_context, "previous_review": previous_review,
                 "checkpoint": checkpoint_review, "time_budget_seconds": max(1, budget - 120) if budget else None}
                 if research_context or params.get("mode") == "ai" else {})
+            report_options.update(frozen_input=frozen_input, input_checkpoint=checkpoint_input)
             report = await asyncio.wait_for(pipeline.build_report(material, params, **report_options), timeout=budget or None)
             if capture_diagnostics:
                 report["snapshot"]["public_body_capture"] = capture_diagnostics
@@ -499,7 +523,8 @@ class JobRunner:
             committing.set()
             saved = await asyncio.to_thread(self.store.save_report, report)
             return {"report_id": saved["id"], "title": saved["title"], "source_count": saved["source_count"], "mode": saved["mode"],
-                    "public_body_capture": capture_diagnostics, "research_run_id": params.get("research_run_id", "")}
+                    "public_body_capture": capture_diagnostics, "research_run_id": params.get("research_run_id", ""),
+                    "report_input_snapshot": input_state["value"]}
         raise ValueError("不支持的任务类型。")
 
     async def _research(self, job):

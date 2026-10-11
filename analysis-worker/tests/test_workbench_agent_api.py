@@ -106,6 +106,34 @@ def test_read_scope_and_catalog_cannot_open_admin_login_or_purge(tmp_path, monke
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("action", ["cancel", "retry"])
+@pytest.mark.parametrize("scopes,allowed", [(('read', 'review'), True), (('read', 'run'), False)])
+def test_auto_review_job_actions_require_review_not_run(tmp_path, monkeypatch, action, scopes, allowed):
+    async def scenario():
+        async with local_client(tmp_path, monkeypatch) as (app, client):
+            job = app.state.store.create_job('collect', {'_evidence_review': True,
+                'source': 'evidence_review', 'review_options': {}, 'review_snapshot': [], 'snapshot_digest': 'synthetic'})
+            if action == 'retry':
+                app.state.store.update_job(job['id'], status='failed', result={'completed': 0}, error='synthetic failure')
+            headers, _ = await grant(client, tmp_path, scopes=scopes)
+            read = await client.post('/agents/v1/read', headers=headers,
+                json={'operation': 'job.get', 'arguments': {'id': job['id']}})
+            assert read.status_code == 200
+            listing = await client.post('/agents/v1/read', headers=headers,
+                json={'operation': 'jobs.list', 'arguments': {}})
+            assert [row['id'] for row in listing.json()['items']] == [job['id']]
+            response = await client.post('/agents/v1/preview', headers=headers,
+                json={'operation': 'job.' + action, 'arguments': {'id': job['id']}})
+            assert response.status_code == (200 if allowed else 403), response.text
+            if allowed:
+                executed = await client.post('/agents/v1/execute', headers=headers, json=execution(response.json()))
+                assert executed.status_code == (202 if action == 'retry' else 200), executed.text
+                assert app.state.store.get_job(job['id'])['status'] == ('failed' if action == 'retry' else 'cancelled')
+            else:
+                assert app.state.store.list_jobs()['total'] == 1
+    asyncio.run(scenario())
+
+
 def test_research_preview_binding_confirmation_expiry_and_one_use_idempotency(tmp_path, monkeypatch):
     async def scenario():
         async with local_client(tmp_path, monkeypatch) as (app, client):
@@ -408,9 +436,15 @@ def test_continuation_uses_current_business_confirmation_and_preserves_omitted_l
 def test_report_retry_and_cancel_use_existing_business_validation_and_receipts(tmp_path, monkeypatch):
     async def scenario():
         async with local_client(tmp_path, monkeypatch) as (app, client):
+            from app.workbench.pipeline import prepare_report_input
+            from app.workbench.report_inputs import capture_report_input_snapshot
+            from test_workbench_report_input_snapshot import material
+            app.state.store.import_items([material()])
             original = app.state.store.create_job("report", {"start_date": "2026-10-01", "end_date": "2026-10-10",
                 "mode": "evidence", "read_original": False})
-            app.state.store.update_job(original["id"], status="failed", error="isolated failure")
+            snapshot = await prepare_report_input(app.state.store.report_items("2026-10-01", "2026-10-10"), original['params'])
+            app.state.store.update_job(original["id"], status="failed", error="isolated failure",
+                result={'report_input_snapshot': capture_report_input_snapshot(snapshot, original['params'])})
             headers, _ = await grant(client, tmp_path)
             retry = await preview(client, headers, "job.retry", {"id": original["id"]})
             response = await client.post("/agents/v1/execute", headers=headers, json=execution(retry))
@@ -424,6 +458,42 @@ def test_report_retry_and_cancel_use_existing_business_validation_and_receipts(t
             repeated = await client.post("/agents/v1/execute", headers=headers, json=execution(cancel, "cancel-key-001"))
             assert repeated.json() == cancelled.json()
             assert app.state.store.list_jobs()["total"] == 2
+    asyncio.run(scenario())
+
+
+def test_agent_report_latest_preview_is_bound_and_rejection_receipt_is_replayed(tmp_path, monkeypatch):
+    from test_workbench_report_input_snapshot import material
+    async def scenario():
+        async with local_client(tmp_path, monkeypatch) as (app, client):
+            store = app.state.store
+            store.import_items([material()])
+            original = store.create_job('report', {'start_date': '2026-10-01', 'end_date': '2026-10-10',
+                'mode': 'evidence', 'read_original': False})
+            store.update_job(original['id'], status='failed', error='synthetic legacy failure')
+            headers, _ = await grant(client, tmp_path)
+            failed_original = await preview(client, headers, 'job.retry', {'id': original['id']})
+            refused = await client.post('/agents/v1/execute', headers=headers,
+                json=execution(failed_original, 'original-rejection-001'))
+            assert refused.status_code == 422 and store.list_jobs()['total'] == 1
+            latest = await preview(client, headers, 'job.retry', {
+                'id': original['id'], 'options': {'input_mode': 'latest'}})
+            store.import_items([material('プレビュー後に変更された公開本文。')])
+            request = execution(latest, 'latest-conflict-001')
+            changed = await client.post('/agents/v1/execute', headers=headers, json=request)
+            assert changed.status_code == 409, changed.text
+            assert changed.json()['error']['code'] == 'request_error'
+            replay = await client.post('/agents/v1/execute', headers=headers, json=request)
+            assert replay.status_code == 409 and replay.json() == changed.json()
+            assert replay.headers['x-peace-atlas-replayed'] == 'true'
+            assert store.list_jobs()['total'] == 1
+            fresh = await preview(client, headers, 'job.retry', {
+                'id': original['id'], 'options': {'input_mode': 'latest'}})
+            resumed = await client.post('/agents/v1/execute', headers=headers,
+                json=execution(fresh, 'latest-fresh-001'))
+            assert resumed.status_code == 202, resumed.text
+            child = store.get_job(resumed.json()['id'])
+            assert child['result']['report_input_snapshot']['snapshot']['items'][0]['content'] == 'プレビュー後に変更された公開本文。'
+            assert store.get_job(original['id'])['result'] is None
     asyncio.run(scenario())
 
 

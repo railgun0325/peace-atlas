@@ -180,7 +180,7 @@ export async function renderJobs(ctx) {
             analysisRetry && el('p', { class: 'warning-note analysis-resume-note' }, '已保存采集快照；此操作只补待审 AI 分析，不重新打开采集。'),
             analysisRetry && button(analysisStatus === 'failed' ? '仅重试 AI 分析' : '继续 AI 分析', () => action(instance, 'retry'), 'secondary small', 'refresh')]
           : budgetStopped ? [el('p', { class: 'warning-note' }, '已达到本次预算。当前任务没有可读取的研究记录，无法恢复已保存线索。')]
-          : ['failed', 'cancelled', 'interrupted', 'partial'].includes(job.status) ? [button('创建重试任务', () => action(instance, 'retry'), 'secondary small', 'refresh'), job.kind === 'report' && job.params?.mode === 'ai' && button('调整分析方式并续跑', () => openReportRetry(ctx, job, { onCreated: () => instance.modal.close() }), 'secondary small', 'refresh')] : []));
+          : ['failed', 'cancelled', 'interrupted', 'partial'].includes(job.status) ? [button(job.kind === 'report' ? '免费预览报告续跑' : '创建重试任务', () => job.kind === 'report' ? openReportRetry(ctx, job, { onCreated: () => instance.modal.close() }) : action(instance, 'retry'), 'secondary small', 'refresh')] : []));
         instance.controlState = controlState;
         instance.status = job.status;
       }
