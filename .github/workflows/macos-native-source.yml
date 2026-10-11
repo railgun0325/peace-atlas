@@ -1,4 +1,4 @@
-name: Build and verify public macOS fast-classification source and installer
+name: Build and verify public macOS binary-classification source and installer
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa
+      EXPECTED_MANIFEST_SHA256: 6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e
     steps:
       - name: Fetch the exact same-repository source commit
         env:
@@ -47,9 +47,9 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '5a4d74509c7482beb042b3ad5837eb2a78d06ab3':
+              if source_sha != 'be315a35e7eefad0f26c58cc9a3e20f373df642e':
                   raise ValueError('Only the root-approved correction source commit is supported')
-              if tag != 'v2.0.0-fast-classification-fixed.20261012':
+              if tag != 'v2.0.0-binary-account-types.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
@@ -87,13 +87,13 @@ jobs:
               else:
                   raise SystemExit('Draft lookup exceeded the bounded release list')
               if not matches:
-                  if tag != 'v2.0.0-fast-classification-fixed.20261012':
+                  if tag != 'v2.0.0-binary-account-types.20261012':
                       raise SystemExit('Only the explicitly requested correction draft may be created')
                   resolved = api('repos/' + repo + '/commits/' + source_sha)
                   if resolved.get('sha') != source_sha:
                       raise SystemExit('Draft source commit did not resolve exactly')
                   body = {'tag_name': tag,
-                          'name': 'PEACE ATLAS 2.0.0 - Foundation correction and native acceptance candidate',
+                          'name': 'PEACE ATLAS 2.0.0 - Binary account types and native acceptance candidate',
                           'body': 'Public repository draft candidate from source ' + source_sha + '. Source regression, formal report and account/activity recheck acceptance must be recorded before this workflow is bound; native acceptance remains pending. Assets upload only after platform checks pass. This draft is not a completed release. No Apple notarization has been performed.',
                           'draft': True, 'prerelease': True}
                   created = subprocess.run(['gh', 'api', '--hostname', 'github.com', '--method', 'POST',
@@ -411,7 +411,7 @@ jobs:
               raise SystemExit('Native derived archive must not be represented as either raw ZIP')
           assets = root / 'release-assets'
           assets.mkdir()
-          name = ('PEACE-ATLAS-2.0.0-macos-arm64-fast-classification-20261012-native-' + os.environ['SOURCE_SHA'][:12]
+          name = ('PEACE-ATLAS-2.0.0-macos-arm64-binary-account-types-20261012-native-' + os.environ['SOURCE_SHA'][:12]
                   + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           output = assets / name
           shutil.copy2(finalized[0], output)
@@ -543,7 +543,7 @@ jobs:
               raise SystemExit('The existing fixed release tag must point directly to the exact correction source commit')
           assets = sorted((root / 'release-assets').iterdir())
           archive_name = accepted['native_finalized_archive']
-          if not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-macos-arm64-fast-classification-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', archive_name):
+          if not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-macos-arm64-binary-account-types-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', archive_name):
               raise SystemExit('Unexpected accepted native asset name')
           pkg_name = pathlib.Path(archive_name).stem + '.pkg'
           wanted = {archive_name, archive_name + '.sha256', archive_name + '.acceptance.json',

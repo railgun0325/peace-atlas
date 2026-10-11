@@ -1,4 +1,4 @@
-name: Build and verify public Windows fast-classification source
+name: Build and verify public Windows binary-classification source
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa
+      EXPECTED_MANIFEST_SHA256: 6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e
     steps:
       - name: Fetch the exact same-repository committed source
         env:
@@ -47,9 +47,9 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != '5a4d74509c7482beb042b3ad5837eb2a78d06ab3':
+              if source_sha != 'be315a35e7eefad0f26c58cc9a3e20f373df642e':
                   raise ValueError('Only the root-approved correction source commit is supported')
-              if tag != 'v2.0.0-fast-classification-fixed.20261012':
+              if tag != 'v2.0.0-binary-account-types.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
@@ -392,7 +392,7 @@ jobs:
           result = json.loads((evidence / 'build-result.json').read_text(encoding='utf-8'))
           assets = root / 'release-assets'
           assets.mkdir()
-          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-fast-classification-20261012-native-' + os.environ['SOURCE_SHA'][:12]
+          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-binary-account-types-20261012-native-' + os.environ['SOURCE_SHA'][:12]
                         + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           source_receipt = json.loads((evidence / 'source-receipt.json').read_text(encoding='utf-8'))
           acceptance = {**source_receipt, 'ok': True, 'native_accepted_archive': asset_name, 'native_accepted_archive_sha256': result['sha256'],
@@ -444,7 +444,7 @@ jobs:
           if not archive.is_relative_to(source_dist) or hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_accepted_archive_sha256']:
               raise SystemExit('The exact native-tested ZIP changed before upload')
           asset_name = accepted['native_accepted_archive']
-          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-fast-classification-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
+          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-binary-account-types-20261012-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
               raise SystemExit('Unexpected candidate asset name')
           assets = root / 'release-assets'
           sidecars = [assets / (asset_name + '.sha256'), assets / (asset_name + '.acceptance.json')]
