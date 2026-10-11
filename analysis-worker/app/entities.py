@@ -7,7 +7,7 @@ import yaml
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = BASE_DIR / "config" / "entities.yml"
+DEFAULT_CONFIG = BASE_DIR / "config" / "japan_peace_entities.yml"
 
 
 def load_entity_config(path: Path | None = None) -> dict[str, Any]:

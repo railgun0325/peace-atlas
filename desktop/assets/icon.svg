@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="PEACE ATLAS geometric peace emblem">
+  <title>PEACE ATLAS emblem</title>
+  <desc>An ivory open peace ring and two parallel vermilion diagonal cuts on an ink background. No text, external assets, or rounded mask.</desc>
+  <rect width="1024" height="1024" fill="#171C19"/>
+  <g fill="none" stroke="#F1EDE2" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M790 530 A290 290 0 1 1 500 240" stroke-width="80"/>
+    <path d="M500 240 V808 M500 532 L302 730 M500 532 L698 730" stroke-width="68"/>
+  </g>
+  <g fill="#E14B31">
+    <path d="M556 298 L698 156 L746 204 L604 346 Z"/>
+    <path d="M646 388 L788 246 L836 294 L694 436 Z"/>
+  </g>
+</svg>

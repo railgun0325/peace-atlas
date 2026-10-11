@@ -31,8 +31,8 @@
 
 ```bash
 # Instagram 凭据 (必填 — Instagram 现在所有内容都需要登录)
-INSTAGRAM_USERNAME=hong06234
-INSTAGRAM_PASSWORD=+Lvs,*>2_Nu4s>#
+INSTAGRAM_USERNAME=<configure-locally>
+INSTAGRAM_PASSWORD=<configure-locally>
 
 # 代理配置 (按优先级)
 PROXY_URL=http://127.0.0.1:7897            # 优先级1：显式代理

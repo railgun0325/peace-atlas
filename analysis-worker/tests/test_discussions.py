@@ -108,19 +108,19 @@ def test_parse_reddit_rss_feed():
 def test_reddit_query_terms_are_capped_for_default_keywords():
     terms = reddit_query_terms(None)
     assert terms
-    assert terms[0] == "Taiwan politics"
+    assert terms[0] == "Japan peace movement"
     assert len(terms) <= len(DEFAULT_DISCUSSION_KEYWORDS)
-    assert "Taiwan Strait" in terms
+    assert "Okinawa US base" in terms
 
 
 def test_reddit_query_terms_translate_common_chinese_keywords():
-    terms = reddit_query_terms(["台海", "國防預算"])
-    assert "Taiwan Strait" in terms
-    assert "Taiwan defense budget" in terms
+    terms = reddit_query_terms(["憲法九条", "防衛費"])
+    assert "Article 9 Japan" in terms
+    assert "Japan defense spending" in terms
 
 
 def test_reddit_default_subreddits_are_conservative():
-    assert reddit_subreddits(None) == ["taiwan"]
+    assert reddit_subreddits(None) == ["japan", "okinawa", "japanlife", "newsokur"]
 
 
 def test_parse_dcard_rsshub_json_feed():
@@ -143,8 +143,8 @@ def test_parse_dcard_rsshub_json_feed():
 
 def test_default_discussion_keywords_are_expanded():
     assert len(DEFAULT_DISCUSSION_KEYWORDS) >= 25
-    assert "Taiwan Strait" in DEFAULT_DISCUSSION_KEYWORDS
-    assert "民進黨" in DEFAULT_DISCUSSION_KEYWORDS
+    assert "憲法九条" in DEFAULT_DISCUSSION_KEYWORDS
+    assert "沖縄 基地" in DEFAULT_DISCUSSION_KEYWORDS
 
 
 def test_discussion_relevance_requires_taiwan_anchor_or_specific_keyword():

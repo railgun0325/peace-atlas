@@ -131,7 +131,7 @@ class JapanSocialFetchRequest(BaseModel):
     include_verified_accounts: bool = False
     include_candidate_accounts: bool = False
     account_ids: list[int] | None = None
-    max_posts: int = Field(default=50, ge=1, le=500)
+    max_posts: int = Field(default=20, ge=1, le=100)
 
 
 class JapanSocialSearchRequest(BaseModel):

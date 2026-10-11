@@ -29,7 +29,7 @@ entities:
     - name: 共産党
       aliases: ["日本共産党", "JCP", "Japanese Communist Party", "共産"]
     - name: 国民民主党
-      aliases: ["国民", "DPP", "Democratic Party for the People", "Kokumin"]
+      aliases: ["DPP", "Democratic Party for the People", "Kokumin"]
     - name: れいわ新選組
       aliases: ["れいわ", "Reiwa Shinsengumi", "Reiwa"]
     - name: 社民党

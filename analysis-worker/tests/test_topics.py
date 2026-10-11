@@ -1,14 +1,18 @@
 from app.topics import classify_topics
+from app.entities import match_entities
 
 
-def test_classify_defense_topic():
-    topics = classify_topics("国防部说明军购进度", "立法院审查国防预算，涉及无人机与战备。")
+def test_default_taxonomy_classifies_article9_and_okinawa():
+    topics = classify_topics("憲法九条と沖縄", "Article 9 and Okinawa US military base peace movement")
     names = {item["topic_name"] for item in topics}
-    assert "国防" in names
-    assert "立法院" in names
+    assert "宪法九条/平和主義" in names
+    assert "米軍基地/沖縄" in names
 
 
-def test_classify_cross_strait_topic_traditional():
-    topics = classify_topics("陸委會回應兩岸交流", "國台辦表示將持續關注台海局勢。")
-    names = {item["topic_name"] for item in topics}
-    assert "两岸" in names
+def test_default_taxonomy_does_not_label_unrelated_sport():
+    matches = classify_topics("Football match", "The match ended with two goals.")
+    assert [item["topic_name"] for item in matches] == ["未分类/待研判"]
+
+
+def test_default_entity_configuration_is_loadable():
+    assert match_entities("Liberal Democratic Party and Kishida Fumio")

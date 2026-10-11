@@ -14,7 +14,7 @@ STATUS_LOCK = threading.Lock()
 STATUS: dict[str, object] = {
     "ok": True,
     "status": "idle",
-    "message": "Instagram login helper is ready.",
+    "message": "Instagram 登录助手已就绪。",
 }
 LOGIN_THREAD: threading.Thread | None = None
 
@@ -38,16 +38,30 @@ def _set_status(**payload: object) -> None:
 
 def _get_status() -> dict[str, object]:
     with STATUS_LOCK:
-        return dict(STATUS)
+        payload = dict(STATUS)
+    try:
+        from app.instagram_safe import validate_login_helper_status
+
+        validated = validate_login_helper_status(payload)
+        if validated != payload:
+            _set_status(**validated)
+            return validated
+    except Exception:
+        pass
+    return payload
 
 
 def _run_login(force_reset: bool, timeout_seconds: int) -> None:
     try:
         from app.instagram_safe import prepare_login_session
 
-        _set_status(ok=True, status="login_window_open", message="Login browser is open. Complete Instagram login there.")
+        _set_status(ok=True, status="opening_login_window", message="正在启动登录浏览器...")
         result = asyncio.run(
-            prepare_login_session(force_reset=force_reset, timeout_seconds=timeout_seconds)
+            prepare_login_session(
+                force_reset=force_reset,
+                timeout_seconds=timeout_seconds,
+                status_callback=lambda payload: _set_status(**payload),
+            )
         )
         _set_status(**result)
     except Exception as exc:
@@ -87,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
             force_reset = str(query.get("force_reset", ["false"])[0]).lower() in {"1", "true", "yes"}
             timeout_seconds = int(query.get("timeout", ["600"])[0] or 600)
             if LOGIN_THREAD and LOGIN_THREAD.is_alive():
-                _json(self, 409, {**_get_status(), "message": "Login window is already open."})
+                _json(self, 409, _get_status())
                 return
             LOGIN_THREAD = threading.Thread(
                 target=_run_login,
@@ -95,13 +109,25 @@ class Handler(BaseHTTPRequestHandler):
                 daemon=True,
             )
             LOGIN_THREAD.start()
-            _json(self, 200, {"ok": True, "status": "starting", "message": "Opening Instagram login window."})
+            _json(self, 200, {"ok": True, "status": "starting", "message": "正在打开 Instagram 登录窗口。"})
             return
         if parsed.path == "/instagram/session/clear":
             try:
                 from app.instagram_safe import clear_login_session
 
                 result = clear_login_session()
+                _set_status(**result)
+                _json(self, 200, result)
+            except Exception as exc:
+                _json(self, 500, {"ok": False, "status": "helper_error", "message": str(exc)})
+            return
+        if parsed.path == "/instagram/login/rate-limited":
+            try:
+                query = parse_qs(parsed.query)
+                seconds = int(query.get("seconds", ["3600"])[0] or 3600)
+                from app.instagram_safe import mark_login_rate_limited
+
+                result = mark_login_rate_limited(seconds=seconds)
                 _set_status(**result)
                 _json(self, 200, result)
             except Exception as exc:

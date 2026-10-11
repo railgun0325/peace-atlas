@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import re
 
 MAPPING: dict[str, str] = {
     # Prefectures
@@ -85,7 +86,7 @@ MAPPING: dict[str, str] = {
     "九州": "九州地方", "Kyushu": "九州地方", "Kyūshū": "九州地方",
     "東北": "東北地方", "Tohoku": "東北地方", "Tōhoku": "東北地方",
     "中部": "中部地方", "Chubu": "中部地方", "Chūbu": "中部地方",
-    "中国": "中国地方", "Chugoku": "中国地方", "Chūgoku": "中国地方",
+    "中国": "中国地方", "中国地方": "中国地方", "Chugoku": "中国地方", "Chūgoku": "中国地方",
     "四国": "四国地方", "Shikoku": "四国地方",
     "北陸": "北陸地方", "Hokuriku": "北陸地方",
     "北海道地方": "北海道", "Hokkaido region": "北海道",
@@ -124,9 +125,20 @@ def search(text: str) -> list[dict[str, Any]]:
     """Find all recognized place names in text, returning canonical forms."""
     if not text:
         return []
+    # A publisher's URL is a source identifier, not a geographic mention.
+    text = re.sub(r"https?://[^\s<>]+", " ", text, flags=re.I)
+    text = re.sub(r"(?<![\w-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s<>]*)?", " ", text, flags=re.I)
     found: dict[str, dict[str, Any]] = {}
     for variant, canonical in MAPPING.items():
-        if variant.lower() in text.lower() or variant in text:
+        # Bare 中国 can refer to the country; only the explicit regional name
+        # or its romanization is unambiguous enough for a Japanese region tag.
+        if variant == "中国":
+            continue
+        if re.fullmatch(r"[A-Za-z\u00c0-\u024f ]+", variant):
+            matched = re.search(r"(?<![A-Za-z\u00c0-\u024f])" + re.escape(variant) + r"(?![A-Za-z\u00c0-\u024f])", text, re.I)
+        else:
+            matched = variant in text
+        if matched:
             if canonical not in found:
                 found[canonical] = {
                     "matched_text": variant,

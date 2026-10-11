@@ -425,7 +425,7 @@ Article 9</textarea>
 Peace Boat
 Article 9
 Japan peace movement</textarea>
-          <label><input type="checkbox" id="socialIncludeVerifiedAccounts" /> 同时抓取已核验账号公开内容</label>
+          <label><input type="checkbox" id="socialIncludeVerifiedAccounts" checked /> 同时抓取已核验账号公开内容</label>
           <div class="detail-box">
             <strong>Instagram 登录状态</strong>
             <p class="hint" id="igLoginStatus">尚未检查。</p>
@@ -440,7 +440,7 @@ Japan peace movement</textarea>
           <label>指定账号 ID（逗号分隔；填写后会额外抓取这些账号）</label>
           <input id="socialAccountIds" placeholder="1,2,3" />
           <label>每个平台/账号最大帖子数</label>
-          <input id="socialMaxPosts" type="number" min="1" max="500" value="50" />
+          <input id="socialMaxPosts" type="number" min="1" max="100" value="20" />
           <div class="actions">
             <button onclick="fetchSocialMedia(this)">开始抓取社媒</button>
           </div>
@@ -674,6 +674,20 @@ Japan peace movement</textarea>
       if (box) box.textContent = message;
     }
 
+    function formatInstagramHelperStatus(data) {
+      if (!data || !data.status) return "登录助手状态未知。";
+      if (data.status === "opening_login_window") return "opening_login_window: 正在启动登录浏览器...";
+      if (data.status === "closing_stale_login_window") return `closing_stale_login_window: ${data.message || "正在关闭旧登录窗口。"}`;
+      if (data.status === "login_window_open") return `login_window_open: ${data.message || "登录窗口已打开，请在 Firefox 中完成人工登录。"}`;
+      if (data.status === "login_window_closed") return `login_window_closed: ${data.message || "登录窗口没有成功显示，请重新点击登录/续登。"}`;
+      if (data.status === "login_saved") return "login_saved: Instagram 登录状态已保存。";
+      if (data.status === "login_cooldown_active") return `login_cooldown_active: ${data.message || "Instagram 限流冷却中，暂停登录和采集。"}`;
+      if (data.status === "firefox_launch_failed") return `firefox_launch_failed: ${data.message || "Firefox 启动失败。"}`;
+      if (data.status === "login_not_completed") return `login_not_completed: ${data.message || "尚未检测到登录状态，请继续在登录窗口中操作。"}`;
+      if (data.status === "helper_error") return `helper_error: ${data.message || "登录助手异常。"}`;
+      return `${data.status}: ${data.message || ""}`;
+    }
+
     async function helperJson(path, options = {}) {
       const res = await fetch(`${IG_LOGIN_HELPER}${path}`, {
         ...options,
@@ -681,6 +695,7 @@ Japan peace movement</textarea>
       });
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
+      if (res.status === 409 && data.status === "login_window_open") return data;
       if (!res.ok) throw new Error(data.message || text || `HTTP ${res.status}`);
       return data;
     }
@@ -689,7 +704,16 @@ Japan peace movement</textarea>
       await withBusy(button, async () => {
         try {
           const data = await request("/admin/instagram/session");
-          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+          let message = `${data.status}: ${data.message || ""}`;
+          if (!data.ok) {
+            try {
+              const helper = await helperJson("/instagram/login/status");
+              if (helper.status && helper.status !== "idle") {
+                message += `；登录助手：${formatInstagramHelperStatus(helper)}`;
+              }
+            } catch {}
+          }
+          setInstagramLoginStatus(message);
         } catch (err) {
           setInstagramLoginStatus(`检查失败：${err.message || err}`);
         }
@@ -701,7 +725,7 @@ Japan peace movement</textarea>
         await wait(2000);
         try {
           const data = await helperJson("/instagram/login/status");
-          setInstagramLoginStatus(`${data.status}: ${data.message || ""}`);
+          setInstagramLoginStatus(formatInstagramHelperStatus(data));
           if (data.status === "login_saved" || data.status === "login_not_completed" || data.status === "helper_error") {
             await refreshInstagramLoginStatus(null);
             return;
@@ -728,7 +752,7 @@ Japan peace movement</textarea>
         }
         try {
           const helper = await helperJson(`/instagram/login/start?force_reset=${forceReset ? "true" : "false"}`, { method: "POST" });
-          setInstagramLoginStatus(helper.message || "登录窗口正在打开。请在弹出的浏览器里完成登录。");
+          setInstagramLoginStatus(formatInstagramHelperStatus(helper));
           pollInstagramLoginStatus();
         } catch (err) {
           setInstagramLoginStatus(`无法打开登录助手：${err.message || err}。请先运行 scripts\\Start-InstagramLoginHelper.ps1，或用一键启动器重新启动系统。`);
@@ -1062,11 +1086,24 @@ Japan peace movement</textarea>
       const count = diag.post_count ?? diag.filtered_post_count ?? 0;
       const status = diag.status_code ? `HTTP ${diag.status_code}` : "";
       const filtered = diag.filtered_out ? `过滤 ${diag.filtered_out} 条非相关结果` : "";
+      const outcome = diag.outcome ? `状态 ${diag.outcome}` : "";
+      const retry = diag.retryable ? "可稍后重试" : "";
+      const pwStatus = diag.playwright_statuses?.length ? `Playwright ${diag.playwright_statuses.join(",")}` : "";
       const msg = diag.message || "";
       let line = `${prefix}${name}：${ok}，结果 ${count} 条`;
       if (status) line += `，${status}`;
+      if (outcome) line += `，${outcome}`;
+      if (retry) line += `，${retry}`;
+      if (pwStatus) line += `，${pwStatus}`;
       if (filtered) line += `，${filtered}`;
       if (msg) line += `，${msg}`;
+      if (diag.instance_results?.length) {
+        const sample = diag.instance_results.slice(0, 4).map(i => {
+          const host = (i.instance || i.url || "").replace(/^https?:\/\//, "");
+          return `${host || "instance"}:${i.reason || i.status || "unknown"}`;
+        }).join("；");
+        line += `\n${prefix}  镜像检查：${sample}`;
+      }
       const fallback = diag.fallback;
       if (fallback) {
         line += `\n${formatSocialDiagnostic(fallback, "  兜底 ")}`;
@@ -1098,8 +1135,8 @@ Japan peace movement</textarea>
         const accountIds = idStr ? idStr.split(",").map(s => parseInt(s.trim())).filter(Boolean) : null;
         const keywords = document.getElementById("socialKeywords").value
           .split("\n").map(s => s.trim()).filter(Boolean);
-        log.textContent += `平台：${platforms.join("、") || "默认平台"}；每个平台/账号最大帖子数：${Number(document.getElementById("socialMaxPosts").value || 50)}。\n`;
-        log.textContent += "Twitter/X: Nitter RSS（无需登录）；Instagram: Instagrapi（需在 .env 设置 INSTAGRAM_USERNAME/INSTAGRAM_PASSWORD）。\n";
+        log.textContent += `平台：${platforms.join("、") || "默认平台"}；每个平台/账号最大帖子数：${Number(document.getElementById("socialMaxPosts").value || 20)}。\n`;
+        log.textContent += "Twitter/X: 优先抓取已核验账号的公开时间线；Instagram: 使用人工登录后的 Playwright 低频采集，遇到验证码或风控会停止。\n";
 
         const res = await fetch("/japan/social/fetch/stream", {
           method: "POST",
@@ -1111,7 +1148,7 @@ Japan peace movement</textarea>
             keywords: keywords,
             include_verified_accounts: document.getElementById("socialIncludeVerifiedAccounts").checked,
             account_ids: accountIds,
-            max_posts: Number(document.getElementById("socialMaxPosts").value || 50)
+            max_posts: Number(document.getElementById("socialMaxPosts").value || 20)
           })
         });
         if (!res.ok || !res.body) throw new Error(await res.text());
@@ -1168,7 +1205,7 @@ Japan peace movement</textarea>
                 log.textContent += "\n⚠️ 没有抓取到入库帖子。\n";
                 log.textContent += "  • Twitter 关键词搜索受限（Nitter 不支持搜索 RSS），建议勾选「同时抓取已核验账号」直接抓取账号时间线。\n";
                 log.textContent += "  • 日文关键词可能无法被 Bing/Google 搜索索引。\n";
-                log.textContent += "  • Instagram 需先运行 python ig_login.py 登录一次。\n";
+                log.textContent += "  • Instagram 需先点击上方「登录/续登」并完成人工登录；如出现验证码/安全确认，请先处理后再重试。\n";
               }
               document.getElementById("socialProgressBar").style.width = "100%";
               document.getElementById("socialProgressLabel").textContent = "完成";

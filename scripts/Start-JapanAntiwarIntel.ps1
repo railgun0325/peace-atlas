@@ -35,7 +35,7 @@ function To-WslPath {
 
 function Run-WslScript {
     param([string]$Script, [int]$TimeoutSeconds = 300)
-    $tmp = Join-Path $ProjectRoot ".launcher-task.sh"
+    $tmp = Join-Path $ProjectRoot (".launcher-task-$PID-$([guid]::NewGuid().ToString('N')).sh")
     $utf8 = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($tmp, ($Script -replace "`r`n", "`n"), $utf8)
     $wslTmp = To-WslPath $tmp
@@ -75,6 +75,70 @@ function Test-Port {
         return $false
     }
 }
+
+function Test-HttpHealth {
+    param([string]$Url)
+    try {
+        $result = Invoke-RestMethod -Uri "$Url/health" -TimeoutSec 2
+        return [bool]$result.ok
+    } catch {
+        return $false
+    }
+}
+
+function Stop-StaleStartupProcesses {
+    param([switch]$IncludeLaunchers)
+
+    if ($IncludeLaunchers) {
+        Get-CimInstance Win32_Process | Where-Object {
+            $_.ProcessId -ne $PID -and
+            $_.CommandLine -match "Start-JapanAntiwarIntel\.ps1" -and
+            $_.CommandLine -match [regex]::Escape($ProjectRoot)
+        } | ForEach-Object {
+            try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+        }
+    }
+
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.CommandLine -match "wsl\.exe" -and
+        $_.CommandLine -match "japan-antiwar-intel" -and
+        $_.CommandLine -match "\.launcher-task"
+    } | ForEach-Object {
+        try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+    }
+
+    try {
+        $wslProject = To-WslPath $ProjectRoot
+        & wsl.exe -d $Distro -u root -- bash -lc @"
+ps -eo pid=,args= | awk '/[d]ocker compose up -d --build/ {print `$1}' | xargs -r kill -9
+ps -eo pid=,args= | awk '/[.]launcher-task(-[0-9a-fA-F-]+)?[.]sh/ {print `$1}' | xargs -r kill -9
+find '$wslProject' -maxdepth 1 -name '.launcher-task*.sh' -mmin +10 -delete 2>/dev/null || true
+"@ | Out-Null
+    } catch {}
+}
+
+function Ensure-SingleLauncher {
+    $existing = Get-CimInstance Win32_Process | Where-Object {
+        $_.ProcessId -ne $PID -and
+        $_.CommandLine -match "Start-JapanAntiwarIntel\.ps1" -and
+        $_.CommandLine -match [regex]::Escape($ProjectRoot)
+    }
+    if (-not $existing) { return }
+
+    if (Test-HttpHealth $script:LastUrl) {
+        Start-Process $script:LastUrl
+        exit
+    }
+
+    [System.Windows.Forms.MessageBox]::Show(
+        "A stale launcher is still starting. It will be cleaned up and restarted; no PC reboot is needed.",
+        "Japan Antiwar Intel"
+    ) | Out-Null
+    Stop-StaleStartupProcesses -IncludeLaunchers
+    Start-Sleep -Seconds 2
+}
+
+Ensure-SingleLauncher
 
 function Start-ProxyBridge {
     if (-not (Test-Port $ProxyBridgePort)) {
@@ -135,7 +199,7 @@ function Start-Compose {
     Run-WslScript @"
 set -e
 cd '$wslProject'
-docker compose up -d
+docker compose up -d --remove-orphans
 "@ 1800 | Out-Null
 }
 
@@ -203,7 +267,6 @@ function Start-InstagramLoginHelper {
     Add-Log "Starting Instagram login helper..."
     $script:InstagramLoginHelperProcess = Start-Process -WindowStyle Hidden -FilePath "python" -ArgumentList @(
         "scripts\instagram_login_helper.py",
-        "--project-root", $ProjectRoot,
         "--port", "$InstagramLoginHelperPort"
     ) -WorkingDirectory $ProjectRoot -PassThru
     Start-Sleep -Seconds 1
@@ -222,10 +285,73 @@ function Wait-Health {
     return "http://$($wslIp):$WslAppPort"
 }
 
+function Stop-AllRelatedProcesses {
+    Add-Log "Cleaning up previous instances..."
+    Stop-StaleStartupProcesses
+    $wslProject = To-WslPath $ProjectRoot
+    try {
+        Add-Log "Checking for stale startup tasks..."
+        Run-WslScript @"
+set -e
+cd '$wslProject'
+true
+"@ 120 | Out-Null
+    } catch {
+        Add-Log "stale startup task check skipped or failed."
+    }
+
+    # 杀掉旧的端口桥接进程 (windows_port_bridge.py)
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.CommandLine -match "windows_port_bridge\.py|wsl_proxy_bridge\.py|instagram_login_helper\.py"
+    } | ForEach-Object {
+        try {
+            Add-Log "Killing stale bridge/helper process pid $($_.ProcessId): $($_.Name)"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
+
+    # 杀掉旧的 uvicorn 后端进程
+    Get-NetTCPConnection -LocalPort 8090,8190 -State Listen -ErrorAction SilentlyContinue | ForEach-Object {
+        $ownerPid = $_.OwningProcess
+        if (-not $ownerPid) { return }
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$ownerPid" -ErrorAction SilentlyContinue
+        if ($proc -and $proc.CommandLine -match "uvicorn") {
+            Add-Log "Killing stale uvicorn process pid $ownerPid..."
+            Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # 杀掉 WSL keep-alive 心跳进程
+    Get-CimInstance Win32_Process | Where-Object {
+        $_.CommandLine -match "wsl\.exe.*keep|wsl\.exe.*true.*Start-Sleep" -or
+        $_.CommandLine -match "WSL awake|wsl.*-- true"
+    } | ForEach-Object {
+        try {
+            Add-Log "Killing stale WSL keep-alive pid $($_.ProcessId)..."
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        } catch {}
+    }
+
+    # 清理全局变量引用
+    if ($script:KeepAliveProcess -and -not $script:KeepAliveProcess.HasExited) {
+        try { $script:KeepAliveProcess.Kill() } catch {}
+    }
+    if ($script:PortBridgeProcess -and -not $script:PortBridgeProcess.HasExited) {
+        try { $script:PortBridgeProcess.Kill() } catch {}
+    }
+    if ($script:InstagramLoginHelperProcess -and -not $script:InstagramLoginHelperProcess.HasExited) {
+        try { $script:InstagramLoginHelperProcess.Kill() } catch {}
+    }
+
+    Start-Sleep -Seconds 2
+    Add-Log "Cleanup done."
+}
+
 function Start-System {
     try {
         $startButton.Enabled = $false
         Add-Log "Starting Japan Antiwar Intel..."
+        Stop-AllRelatedProcesses
         Start-ProxyBridge
         Configure-EnvProxy
         Start-WslKeepAlive

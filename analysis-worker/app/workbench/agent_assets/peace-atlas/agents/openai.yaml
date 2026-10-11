@@ -1,0 +1,6 @@
+interface:
+  display_name: "PEACE ATLAS"
+  short_description: "Operate local evidence research with explicit authorization"
+  default_prompt: "Use $peace-atlas to inspect saved evidence and preview the requested research action."
+policy:
+  allow_implicit_invocation: true

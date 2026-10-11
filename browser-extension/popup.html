@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>连接本机工作台</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><span class="eyebrow">LOCAL SESSION BRIDGE</span><h1>沿用浏览器里的登录</h1><p>连接一次，让工作台验证现有会话。<br>登录仍在你正常使用的浏览器中完成。</p></header>
+  <main>
+    <form id="connect-form">
+      <label for="pairing-url">工作台配对链接</label>
+      <input id="pairing-url" name="pairing-url" type="text" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:…/api/v2/social/bridge/connect?…" required>
+      <p class="hint" id="pairing-hint">在工作台的浏览器连接区域生成链接，5 分钟内粘贴。</p>
+      <button id="connect-button" type="submit">连接并验证会话 <span aria-hidden="true">↗</span></button>
+    </form>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <section aria-label="已连接的平台" id="platforms"></section>
+  </main>
+  <footer>只发送所选平台的必要会话字段到本机。<br>Cookie 不存入扩展、不发送到外网。<br><small>断开连接会停止后续同步；已发起的验证可能完成，工作台已保存会话不随之删除。</small></footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

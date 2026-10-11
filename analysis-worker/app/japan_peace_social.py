@@ -653,6 +653,8 @@ async def fetch_instagram_profile(
     if collect_profile_streaming is not None:
         posts: list[dict[str, Any]] = []
         pw_ok = False
+        pw_errors: list[str] = []
+        pw_statuses: list[str] = []
         try:
             async for event in collect_profile_streaming(username, max_posts):
                 if event["type"] == "ig_post":
@@ -671,6 +673,10 @@ async def fetch_instagram_profile(
                     })
                 elif event["type"] == "ig_error":
                     diagnostic["playwright_error"] = event["message"]
+                    pw_errors.append(str(event.get("message", "")))
+                    event_diag = event.get("diagnostic") or {}
+                    if event_diag.get("status"):
+                        pw_statuses.append(str(event_diag.get("status")))
                 elif event["type"] == "ig_progress":
                     pw_ok = True  # Progress means browser is working
 
@@ -680,10 +686,27 @@ async def fetch_instagram_profile(
                 diagnostic["source"] = "playwright"
                 return posts, diagnostic
 
-            # Playwright ran but got 0 posts — may need login
-            if pw_ok or "登录" in str(diagnostic.get("playwright_error", "")):
-                diagnostic["message"] = diagnostic.get("playwright_error", "Playwright: 未找到帖子（可能需要登录）")
-                diagnostic["ok"] = True  # Don't block; mark as attempted
+            # Do not hide Playwright login/risk stops behind the legacy private API fallback.
+            hard_stop_statuses = {
+                "no_login_state",
+                "challenge_or_rate_limited",
+                "session_expired",
+                "rate_guard_blocked",
+                "playwright_missing",
+                "collector_error",
+            }
+            if hard_stop_statuses.intersection(pw_statuses):
+                diagnostic["message"] = diagnostic.get("playwright_error", "Instagram Playwright 采集已停止。")
+                diagnostic["playwright_statuses"] = pw_statuses
+                diagnostic["source"] = "playwright"
+                return [], diagnostic
+
+            # Playwright ran but got 0 posts; report the real state instead of falling through silently.
+            if pw_ok:
+                diagnostic["message"] = diagnostic.get("playwright_error", "Playwright 已运行，但未找到帖子链接。")
+                diagnostic["ok"] = True
+                diagnostic["source"] = "playwright"
+                diagnostic["playwright_statuses"] = pw_statuses
                 return [], diagnostic
 
         except Exception as exc:
@@ -2013,6 +2036,16 @@ async def fetch_japan_social_stream(
             yield {"type": "rate_limited", "platform": "database", "message": str(exc)}
 
         total = len(accounts)
+        if total == 0:
+            message = "没有找到符合条件的已追踪账号。请先导入/核验账号，或填写具体账号 ID。"
+            diagnostics.append(_diagnostic("accounts", ok=True, post_count=0, message=message))
+            yield {
+                "type": "progress",
+                "current": 0,
+                "total": 0,
+                "platform": "accounts",
+                "message": message,
+            }
         for index, account in enumerate(accounts, start=1):
             plat = str(account.get("platform", "")).lower()
             handle = str(account.get("handle", ""))

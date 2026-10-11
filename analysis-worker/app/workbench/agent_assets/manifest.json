@@ -1,0 +1,13 @@
+{
+  "name": "PEACE ATLAS external Agent support",
+  "protocol": 1,
+  "skill_folder": "peace-atlas",
+  "cli": "peace-atlas/scripts/peace_atlas.py",
+  "public_manifest_route": "/agents/v1/manifest",
+  "public_schema_route": "/agents/v1/schema",
+  "authorization": "Explicit desktop menu grant; independent owner-only connection file; disabled by default",
+  "install_hint": "Open INSTALL.md, select the Agent host's supported skill root, then verify the host's Skills list.",
+  "requires": ["local shell access", "Python 3.10+", "user-exported Agent connection for data/actions"],
+  "automatic_discovery_guaranteed": false,
+  "contains_credentials": false
+}

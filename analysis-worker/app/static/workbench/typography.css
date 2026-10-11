@@ -1,0 +1,89 @@
+@charset "UTF-8";
+
+/* Full OFL fonts ship with the app; no CDN or system-font dependency. */
+@font-face{
+  font-family:"Atlas Mincho";
+  src:url("/assets/fonts/atlas-mincho.woff2") format("woff2");
+  font-style:normal;
+  font-weight:200 900;
+  font-display:swap;
+}
+@font-face{
+  font-family:"Atlas Signal";
+  src:url("/assets/fonts/atlas-signal.woff2") format("woff2");
+  font-style:normal;
+  font-weight:700;
+  font-display:swap;
+}
+:root{
+  --display:"Atlas Mincho","Noto Serif SC","Yu Mincho","Songti SC","SimSun",serif;
+  --signal:"Atlas Signal","Bahnschrift","DIN Alternate",sans-serif;
+}
+
+/* The contrast of thick verticals and fine horizontals carries the title design. */
+h1,h2,h3,.brand,.brand-mark,.nav-link,.sidebar-foot strong,.button,.workspace-process strong{
+  font-family:var(--display);
+  font-weight:800;
+  font-synthesis:none;
+}
+.hero h1,.page-heading h1,.dialog-heading h2,.detail-title{
+  font-weight:900;
+  letter-spacing:-.055em;
+  overflow-wrap:anywhere;
+}
+.hero h1{font-size:clamp(44px,4.4vw,72px);line-height:1.12}
+.page-heading h1{font-size:42px;line-height:1.2}
+.heading-main,.heading-main>div,.dialog-heading>div{min-width:0}
+.brand{letter-spacing:-.025em;line-height:1.2}
+.brand-mark{font-weight:900;letter-spacing:-.06em}
+.sidebar-foot strong{font-weight:900;letter-spacing:-.035em}
+.nav-link{line-height:1.4;letter-spacing:0}
+.button{font-weight:800;line-height:1.4;letter-spacing:0}
+.dialog-heading h2{font-size:27px;line-height:1.3}
+.dialog-footer{flex-wrap:wrap}
+.detail-title{line-height:1.45;letter-spacing:-.03em}
+.emblem-kanji{font-family:var(--display);font-weight:900;font-synthesis:none}
+.workspace-start .panel-heading h2,.workspace-history .panel-heading h2{font-size:27px;line-height:1.3;font-weight:900;letter-spacing:-.035em}
+.workspace-choice h3{font-size:27px;line-height:1.35;font-weight:900;letter-spacing:-.045em}
+.workspace-process strong{font-weight:900;font-size:15px;letter-spacing:-.025em}
+.research-manifesto h2,.research-section-title h2,.social-section-heading h2{font-weight:900;letter-spacing:-.035em;line-height:1.35}
+
+/* Short operational labels are condensed; IDs and editable values stay monospace/sans. */
+.eyebrow,.rail-label,.brand small,.topbar-identity,.emblem-code,.emblem-top,.footer span:first-child{
+  font-family:var(--signal);
+  font-weight:700;
+}
+.eyebrow{font-size:11px;letter-spacing:1.8px}
+.page-heading .eyebrow{font-size:11px;letter-spacing:1.9px}
+.rail-label{font-size:10px;letter-spacing:1.5px}
+.brand small{font-size:10px;letter-spacing:1.5px;line-height:1.2}
+.topbar-identity{font-size:12px;letter-spacing:1.7px}
+.panel-heading>.eyebrow{font-size:10px;letter-spacing:1.4px}
+.dialog-heading .eyebrow{font-size:10px;letter-spacing:1.5px}
+.section-number,.stat-value,.report-number,.section-side-label>.mono,.research-stats strong,.workspace-process .mono{
+  font-family:var(--signal);
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.section-number{font-size:62px;letter-spacing:-1px;line-height:1}
+
+@media(min-width:681px){.brand{font-size:18px}.nav-link{font-size:14px}}
+@media(max-width:1180px){.hero h1{font-size:46px}.page-heading h1{font-size:34px}.section-number{font-size:51px}.brand{font-size:16px}}
+@media(max-width:850px){.workspace-choice h3{font-size:24px}}
+@media(max-width:680px){
+  .hero h1{font-size:36px;letter-spacing:-.035em;line-height:1.2}
+  .page-heading h1{font-size:29px;letter-spacing:-.035em}
+  .section-number{font-size:46px}
+  .nav-link{font-size:12px}
+  .brand{font-size:18px}
+  .brand small{font-size:9px}
+  .topbar-identity{font-size:9px;letter-spacing:.7px}
+  .page-heading .eyebrow{font-size:10px;letter-spacing:1.2px}
+  .panel-heading{flex-wrap:wrap}
+  .panel-heading>.eyebrow{font-size:9px;white-space:normal}
+  .workspace-start .panel-heading h2,.workspace-history .panel-heading h2{font-size:24px}
+  .workspace-choice h3{font-size:24px}
+  .dialog-heading h2{font-size:23px;letter-spacing:-.025em}
+}
+@media(max-width:600px){.hero{grid-template-columns:1fr}.hero-emblem{display:none}}
+@media(max-width:380px){.page-heading h1{font-size:27px}.hero h1{font-size:35px}.topbar-identity{font-size:8px}}

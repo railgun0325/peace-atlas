@@ -18,3 +18,29 @@ analysis-worker/data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Reproducible desktop downloads, distributions, local QA
+.build-cache/
+dist/
+.qa/
+desktop/node_modules/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Private local configuration; retain the public template
+.env.*
+!.env.example
+
+# Local execution, browser evidence and developer environments
+output/
+.playwright-cli/
+.venv*/
+venv/
+*.db
+*.sqlite
+
+# Installed developer dependencies; retain the audited public runtime closure
+node_modules/
+!desktop/harness/node_modules/
+!desktop/harness/node_modules/**

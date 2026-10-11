@@ -1,0 +1,4 @@
+# Preserve audited source and vendored runtime bytes across Windows/macOS clones.
+# desktop/harness/runtime-manifest.json verifies exact SHA-256 values; automatic
+# LF/CRLF conversion would make a fresh checkout fail the desktop build.
+* -text

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#eeede5">
+  <title>反戦研究室 · PEACE ATLAS</title>
+  <link rel="preload" href="/assets/fonts/atlas-mincho.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/atlas-signal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/typography.css">
+  <link rel="stylesheet" href="/assets/features.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">跳转到内容</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="主导航">
+      <a class="brand" href="#overview" aria-label="反戦研究室首页"><span class="brand-mark" aria-hidden="true">平<span>和</span></span><span>反戦研究室<small>PEACE ATLAS</small></span></a>
+      <div class="rail-label">JAPAN / PUBLIC RESEARCH</div>
+      <nav id="navigation"></nav>
+      <div class="sidebar-foot"><span class="signal-stripe" aria-hidden="true"></span><strong>来源先于结论。</strong><p>日本和平运动<br>公开信息研究工作台</p><span class="mono">LOCAL WORKSPACE · V2</span></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar"><div class="topbar-identity"><span class="crosshair" aria-hidden="true">＋</span><span>公開情報 / RESEARCH DESK</span></div><div class="connection" id="connection" role="status"><span class="status-dot"></span>正在连接</div></header>
+      <main id="main" tabindex="-1" aria-live="off"></main>
+      <footer class="footer"><span>PEACE ATLAS / 反戦研究室</span><span>每一个判断，都应能回到原始材料。</span></footer>
+    </div>
+  </div>
+  <div id="notifications" class="notifications" aria-live="polite" aria-atomic="false"></div>
+  <script type="module" src="/assets/app.js"></script>
+</body>
+</html>

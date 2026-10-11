@@ -13,6 +13,7 @@ Scenarios covered:
 """
 
 import asyncio
+import sqlite3
 from datetime import date, datetime, timezone
 from unittest.mock import patch
 
@@ -34,12 +35,15 @@ from app.japan_peace_news import (
 )
 from app.japan_peace_social import (
     DIAGNOSTIC_UNAVAILABLE,
+    fetch_japan_social_stream,
+    fetch_instagram_profile,
     fetch_x_public_diagnostic,
     fetch_instagram_public_diagnostic,
     fetch_twitter_timeline,
 )
 from app.instagram_safe import (
     assess_login_readiness,
+    collect_profile_streaming,
     evaluate_login_state,
 )
 from app.japan_geo import (
@@ -692,9 +696,160 @@ def test_instagram_safe_readiness_missing_state(monkeypatch):
     from app import instagram_safe as mod
     monkeypatch.setattr(mod, "READY_FILE", mod.PROJECT_DIR / "data" / "tmp-ready-missing")
     monkeypatch.setattr(mod, "STATE_FILE", mod.PROJECT_DIR / "data" / "tmp-state-missing.json")
+    monkeypatch.setattr(mod, "SAFE_STATE_FILE", mod.PROJECT_DIR / "data" / "tmp-safe-state-missing.json")
     result = assess_login_readiness()
     assert result["ok"] is False
     assert result["status"] == "no_login_state"
+
+
+def test_instagram_profile_missing_state_does_not_hide_behind_legacy_api(monkeypatch, tmp_path):
+    from app import instagram_safe as mod
+
+    monkeypatch.setattr(mod, "READY_FILE", tmp_path / ".ready")
+    monkeypatch.setattr(mod, "STATE_FILE", tmp_path / "state.json")
+    monkeypatch.setattr(mod, "SAFE_STATE_FILE", tmp_path / "safe_state.json")
+    posts, diag = asyncio.run(
+        fetch_instagram_profile("@peace_jp", date(2026, 5, 1), date(2026, 5, 16), 2)
+    )
+    assert posts == []
+    assert diag["ok"] is False
+    assert diag["source"] == "playwright"
+    assert diag["playwright_statuses"] == ["no_login_state"]
+    assert "登录" in diag["message"]
+
+
+def test_instagram_safe_waits_before_rechecking_account_delay(monkeypatch, tmp_path):
+    from app import instagram_safe as mod
+
+    monkeypatch.setattr(mod, "READY_FILE", tmp_path / ".ready")
+    monkeypatch.setattr(mod, "STATE_FILE", tmp_path / "state.json")
+    monkeypatch.setattr(mod, "SAFE_STATE_FILE", tmp_path / "safe_state.json")
+    mod.SAFE_STATE_FILE.write_text(
+        """
+        {
+          "requests": [],
+          "last_account_at": "2026-05-16T00:00:00+00:00",
+          "cooldown_until": null,
+          "stop_reason": null,
+          "last_status": "ready"
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 5, 16, 0, 0, 30, tzinfo=tz)
+
+    slept: list[float] = []
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(mod, "datetime", FixedDateTime)
+    monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
+
+    async def collect():
+        return [
+            event
+            async for event in collect_profile_streaming(
+                "@peace_jp",
+                1,
+                {"min_account_delay_seconds": 120, "max_requests_per_hour": 20, "max_requests_per_day": 80},
+            )
+        ]
+
+    events = asyncio.run(collect())
+    assert slept
+    assert events[0]["type"] == "ig_progress"
+    assert events[0]["diagnostic"]["status"] == "rate_guard_waiting"
+    assert events[-1]["type"] == "ig_error"
+    assert events[-1]["diagnostic"]["status"] == "rate_guard_blocked"
+
+
+def test_social_stream_reports_empty_account_selection_without_external_calls(monkeypatch):
+    from app import japan_peace_social as mod
+
+    monkeypatch.setattr(mod, "fetch_all", lambda *args, **kwargs: [])
+
+    async def collect():
+        return [
+            event
+            async for event in fetch_japan_social_stream(
+                start_date=date(2026, 5, 1),
+                end_date=date(2026, 5, 16),
+                platforms=["rsshub"],
+                include_verified_accounts=True,
+                max_posts=1,
+                keywords=["反戦"],
+            )
+        ]
+
+    events = asyncio.run(collect())
+    messages = [str(event.get("message", "")) for event in events]
+    assert any("没有找到符合条件的已追踪账号" in message for message in messages)
+    assert events[-1]["type"] == "done"
+
+
+def test_instagram_safe_reads_native_firefox_cookies(tmp_path):
+    from app import instagram_safe as mod
+
+    profile = tmp_path / "firefox"
+    profile.mkdir()
+    db_path = profile / "cookies.sqlite"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE moz_cookies (
+                host TEXT,
+                name TEXT,
+                value TEXT,
+                path TEXT,
+                expiry INTEGER,
+                isSecure INTEGER,
+                isHttpOnly INTEGER,
+                sameSite INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO moz_cookies
+            VALUES ('.instagram.com', 'sessionid', 'abc123', '/', 2000000000000, 1, 1, 1)
+            """
+        )
+
+    cookies = mod._read_firefox_instagram_cookies(profile)
+    assert cookies == [
+        {
+            "name": "sessionid",
+            "value": "abc123",
+            "domain": ".instagram.com",
+            "path": "/",
+            "expires": 2000000000,
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "Lax",
+        }
+    ]
+
+
+def test_instagram_login_cooldown_blocks_readiness_and_start(monkeypatch, tmp_path):
+    from app import instagram_safe as mod
+
+    monkeypatch.setattr(mod, "READY_FILE", tmp_path / ".ready")
+    monkeypatch.setattr(mod, "STATE_FILE", tmp_path / "state.json")
+    monkeypatch.setattr(mod, "SAFE_STATE_FILE", tmp_path / "safe_state.json")
+
+    marked = mod.mark_login_rate_limited(seconds=300)
+    assert marked["status"] == "login_cooldown_active"
+
+    readiness = assess_login_readiness()
+    assert readiness["status"] == "login_cooldown_active"
+
+    result = asyncio.run(mod.prepare_login_session(timeout_seconds=30))
+    assert result["status"] == "login_cooldown_active"
 
 
 def test_instagram_safe_evaluate_session_expired():

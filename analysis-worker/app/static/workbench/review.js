@@ -1,0 +1,74 @@
+import { api } from './api.js';
+import { el, button, field, dialog, setContent, loading, errorBox, notify, number, sourceLink } from './ui.js';
+
+const kinds = { accounts: '账号类型与身份核验', claims: '关系主张', activities: '活动与举办地' };
+const outcomes = { organization: '组织', individual: '个人', unknown: '类型证据不足', confirmed: '已确认', rejected: '已排除', inconclusive: '证据不足' };
+const phases = { starting: '准备范围', investigating: 'DS 正在阅读与查找依据', saving: '保存本批决定', verifying_accounts: '程序核对准确账号回链', complete: '审核流程已完成' };
+
+export function reviewProgress(result = {}) {
+  result = result || {};
+  return `已保存 ${number(result.completed)} / ${number(result.total)} 项 · ${result.current_batch && result.phase !== 'complete' ? `第 ${number(result.current_batch)} 批 / 本批 ${number(result.current_batch_size)} 项 · ` : ''}${phases[result.phase] || '准备自动审核'} · 模型 ${number(result.model_calls)} 次 / 工具 ${number(result.tool_calls)} 次`;
+}
+
+export function reviewResults(result = {}) {
+  result = result || {};
+  return el('section', { class: 'review-results' }, el('h3', {}, '自动审核与核验结果'), el('p', { role: 'status' }, reviewProgress(result)),
+    el('p', { class: 'field-hint' }, '已完成表示全部指定内容已有审核结果。证据不足不等于属实；身份核验、账号类型、关系主张分别记录。原始资料保留，人工锁定类型不会被覆盖。'),
+    el('p', {}, Object.entries(result.outcomes || {}).map(([key, value]) => `${outcomes[key] || key} ${number(value)}`).join(' · ')),
+    el('ol', { class: 'relation-list' }, (result.results || []).map(row => el('li', {},
+      el('details', {}, el('summary', {}, `${kinds[row.kind] || row.kind} · ${outcomes[row.outcome] || row.outcome} · ${row.label || row.id.slice(0, 12)}`),
+        el('p', {}, row.note), row.date && el('p', {}, `实际日期 ${row.date} · 举办地 ${row.prefecture || '无法定位'}`),
+        (row.resolved_evidence || []).map(proof => el('div', {}, sourceLink(proof.url, '查看已核对出处'), el('blockquote', {}, proof.quote))))))));
+}
+
+export function openAutoReview(ctx) {
+  const modal = dialog('自动审核与核验', { subtitle: 'DEEPSEEK / EVIDENCE REVIEW / SAVED PROGRESS' });
+  const checks = Object.entries(kinds).map(([key, label]) => {
+    const input = el('input', { type: 'checkbox', checked: true, value: key });
+    return { key, input, node: el('label', { class: 'checkbox' }, input, label) };
+  });
+  const batch = field('每批记录数', { name: 'review_batch_size', type: 'number', value: 16, min: 1, max: 40,
+    hint: '决定一次 DS 调查处理多少记录，默认 16。不是任务总量上限；全部所选记录会依次处理。' });
+  const recheck = el('input', { type: 'checkbox' });
+  const network = el('input', { type: 'checkbox', checked: true });
+  const preview = el('div'), errors = el('div');
+  let proof = null, values = null, version = 0, busy = false;
+  const controller = new AbortController();
+  modal.modal.addEventListener('close', () => controller.abort(), { once: true });
+  const start = button('同意预估并开始自动审核', async () => {
+    if (!proof || busy) return;
+    busy = true; start.disabled = true;
+    try {
+      const job = await api('reviews/start', { method: 'POST', body: { ...values, input_digest: proof.input_digest }, signal: controller.signal });
+      modal.close(); notify('自动审核已开始。可在任务中心查看逐批进度、核验结果，或取消后继续。'); ctx.navigate('jobs', { selected: job.id });
+    } catch (error) { if (!controller.signal.aborted) setContent(errors, errorBox(error)); busy = false; start.disabled = !proof; }
+  });
+  start.disabled = true;
+  const invalidate = () => { version++; proof = null; start.disabled = true; setContent(preview); };
+  [...checks.map(row => row.input), recheck, network, batch.querySelector('input')].forEach(input => input.addEventListener('change', invalidate));
+  modal.body.append(el('p', {}, '让已配置的 DeepSeek 通过 DSH 工具调查保存材料、查找独立公开出处、核对原文摘录，再批量保存结论。每批保存审核结果与进度；原始内容保留。'),
+    ...checks.map(row => row.node), batch, el('label', { class: 'checkbox' }, recheck, '重新审核已有结论（人工锁定类型仍保留）'),
+    el('label', { class: 'checkbox' }, network, '允许读取与搜索独立公开网页，并执行准确回链核验'), preview, errors);
+  modal.footer.append(button('取消', modal.close, 'secondary'), button('预估范围与用时', async event => {
+    if (busy) return;
+    const control = event.currentTarget, mine = ++version;
+    proof = null; start.disabled = true; control.disabled = true; setContent(errors); setContent(preview, loading('正在统计待审内容…'));
+    try {
+      const input = batch.querySelector('input'); if (!input.reportValidity()) throw new Error('每批记录数需要 1 至 40。');
+      values = { kinds: checks.filter(row => row.input.checked).map(row => row.key), batch_size: Number(input.value), recheck: recheck.checked, use_public_network: network.checked };
+      if (!values.kinds.length) throw new Error('请至少选择一个审核范围。');
+      const estimate = await api('reviews/estimate', { method: 'POST', body: values, signal: controller.signal });
+      if (mine !== version || controller.signal.aborted) return;
+      proof = estimate;
+      const minutes = seconds => Math.max(1, Math.ceil(seconds / 60));
+      setContent(preview, el('p', { class: 'result-box' }, `共 ${number(proof.total)} 项 / ${number(proof.batches)} 批 · ${Object.entries(proof.counts).map(([key, value]) => `${kinds[key]} ${number(value)}`).join(' · ')}`),
+        el('p', {}, `粗略预计 ${minutes(proof.lower_seconds)}–${minutes(proof.upper_seconds)} 分钟。网页与模型响应可能使实际时间更长，无总体数量或时长停止。`),
+        el('p', { class: 'field-hint' }, `${proof.model} · 将调用已配置模型，按实际请求产生费用。${proof.basis}`),
+        !proof.ai_configured && el('p', { class: 'warning-note' }, '请在能力与设置保存 AI 连接。'),
+        !proof.harness_available && el('p', { class: 'warning-note' }, '当前环境缺少 DSH 运行时，请使用完整桌面版本。'),
+        proof.total === 0 && el('p', { class: 'field-hint' }, '当前所选范围没有待审内容。证据不足结果可勾选重新审核。'));
+      start.disabled = !proof.total || !proof.ai_configured || !proof.harness_available;
+    } catch (error) { if (!controller.signal.aborted && mine === version) { setContent(preview); setContent(errors, errorBox(error)); } }
+    finally { control.disabled = false; }
+  }, 'secondary'), start);
+}

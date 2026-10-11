@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "反战情报 · 浏览器会话桥",
+  "version": "0.1.0",
+  "description": "经本人连接后，仅将 X 或 Instagram 的必要会话字段同步到本机情报工作台。",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "alarms"],
+  "optional_permissions": ["cookies"],
+  "optional_host_permissions": [
+    "https://x.com/*",
+    "https://www.instagram.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_popup": "popup.html", "default_title": "连接本机情报工作台"},
+  "incognito": "not_allowed",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:*;"
+  }
+}
