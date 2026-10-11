@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "job_id": "c7a44bf1-87a3-4144-969c-9567498169be",
+  "observed_at": "2026-10-11T18:17:55.415707+00:00",
+  "network_requests_by_verifier": 0,
+  "model_calls_by_verifier": 0,
+  "database_mutations_by_verifier": 0,
+  "configuration_or_profile_file_reads": 0,
+  "installed_source_binding": {
+    "source_freeze_sha256": "1f14cfcc37857ba6446b88a1fadbedefb1b1e6a9e988e94aa451490fecdef2ae",
+    "installation_receipt_sha256": "9a8af94399589d80f41e5c03ca36c0e879c2a5c235145f454aecd17b10186874",
+    "installed_classification_sources": {
+      "backend/app/workbench/query_plan.py": "d50c7120d4c84ae7b13f8a072f915e0aeffb91230e9e74859278ea2f08340f41",
+      "backend/app/workbench/fast_account_classification.py": "63e375c87795998e3b833c533556916056c840daf2cc8293ad30d46e57583fea"
+    }
+  },
+  "request_count_boundary": "Persisted reserved transport attempts; not proof of provider acceptance, billed requests or actual fees",
+  "after_type_counts": {
+    "unknown": 23,
+    "organization": 23,
+    "individual": 15
+  },
+  "trust_counts_unchanged": {
+    "candidate": 59,
+    "verified": 2
+  },
+  "account_public_fields_unchanged": true,
+  "sources_relations_research_activities_unchanged": true,
+  "account_name_handle_url_status_organization_source_metadata_unchanged": true,
+  "public_profiles_verification_sources_and_history_unchanged": true,
+  "sources_saved_relationships_and_activity_reviews_unchanged": true,
+  "automatic_identity_verification_jobs_created": 0,
+  "type_revision_and_job_result_agreement": true,
+  "actual_manual_lock_test": "Not exercised: formal baseline has 0 locked accounts. Fixtures/browser proved lock behavior separately.",
+  "successful_provider_diagnostic": null,
+  "termination_evidence": "Succeeded through the installed strict finish_reason=stop gate; successful provider finish_reason and token counts are not separately persisted.",
+  "installed_request_configuration": {
+    "reasoning_effort": "none",
+    "requested_max_tokens_for_61": 19520,
+    "boundary": "Confirmed installed source configuration, not a separately persisted per-request wire diagnostic"
+  },
+  "interpretation": "Approximate publishing-account type only; no conclusion about individual political identity, organizational affiliation or independently verified real-world identity",
+  "job": {
+    "kind": "collect",
+    "status": "succeeded",
+    "progress": 100,
+    "created_at": "2026-10-11T18:15:48.206488Z",
+    "started_at": "2026-10-11T18:15:48.684948Z",
+    "finished_at": "2026-10-11T18:16:01.520177+00:00",
+    "elapsed_seconds": 12.835229,
+    "options": {
+      "account_ids": [],
+      "batch_size": 100,
+      "recheck": true
+    },
+    "total": 61,
+    "completed": 61,
+    "batches": 1,
+    "reserved_model_requests": 1,
+    "transport_retries": 0,
+    "tool_calls": 0
+  },
+  "baseline_counts": {
+    "accounts": 61,
+    "manual_locked": 0,
+    "type_counts": {
+      "unknown": 35,
+      "organization": 17,
+      "individual": 9
+    },
+    "trust_counts": {
+      "candidate": 59,
+      "verified": 2
+    }
+  },
+  "immutable_table_counts": {
+    "wb_account_keys": 61,
+    "wb_items": 551,
+    "wb_item_revisions": 0,
+    "wb_relations": 252,
+    "wb_research_items": 812,
+    "wb_research_nodes": 108,
+    "wb_research_edges": 337,
+    "wb_research_observations": 674,
+    "wb_research_claims": 61,
+    "wb_research_claim_observations": 223,
+    "wb_research_claim_reviews": 122,
+    "wb_research_deferred": 173,
+    "wb_research_runs": 6
+  },
+  "contains_account_names_handles_urls_bios_or_model_reasons": false
+}

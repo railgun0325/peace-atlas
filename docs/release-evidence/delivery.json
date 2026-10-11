@@ -1,0 +1,70 @@
+{
+  "format": "peace-atlas-current-delivery-v1",
+  "release_tag": "v2.0.0-fast-classification-fixed.20261012",
+  "application_source_commit": "5a4d74509c7482beb042b3ad5837eb2a78d06ab3",
+  "source_manifest_sha256": "f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa",
+  "source_tests_sha256": "c06b3fd280b5c46a95428bb2e000ffc077fdc63468b70f57c86ce94096bcea03",
+  "source_tests": {
+    "passed": 3392,
+    "failed": 0,
+    "windows_posix_tests_skipped": 2,
+    "posix_permissions_exercised_separately": true
+  },
+  "windows": {
+    "installer_file": "PEACE-ATLAS-2.0.0-Windows-x64-Setup.exe",
+    "installer_sha256": "96099ffa8e8d30c7fb7bf092ede9189b568558be339c1e077f4a7176836d0212",
+    "installer_bytes": 307364458,
+    "actual_install_exit_code": 0,
+    "installed_payload_hashes_matched": 8760,
+    "desktop_entrypoints_verified": 3,
+    "formal_startup_verified": true,
+    "research_tables_unchanged_after_upgrade_and_startup": 23,
+    "signing": "unsigned",
+    "user_data_backup_created": true
+  },
+  "macos_arm64": {
+    "actual_system": "macOS 15.7.9 ARM64",
+    "declared_minimum": "macOS 13",
+    "pkg_sha256": "f69c02e14558f9412c8605d62c8bcdba0cb6e610ae6034b8b05421162544bc99",
+    "pkg_bytes": 377089139,
+    "native_build_run": "https://github.com/railgun0325/peace-atlas/actions/runs/38161689870",
+    "actual_installer_run": "https://github.com/railgun0325/peace-atlas/actions/runs/38162629225",
+    "actual_install_completed": true,
+    "installed_startup_exit_code": 0,
+    "frozen_application_members_matching_pkg_payload": 3145,
+    "normal_user_deep_strict_codesign_before_and_after_startup": true,
+    "secure_storage_roundtrip_passed": true,
+    "application_signing": "native ad-hoc",
+    "installer_signing": "unsigned",
+    "apple_notarization": false,
+    "gatekeeper_or_quarantine_changed": false,
+    "intel_package_available": false
+  },
+  "real_fast_classification": {
+    "receipt": "fast-classification.json",
+    "receipt_sha256": "dfbbe980a511420195a9c40afd4fe145ad0ed6133905cf9b8c03e5baa665ada8",
+    "completed": 61,
+    "seconds": 12.835229,
+    "reserved_model_requests": 1,
+    "transport_retries": 0,
+    "tool_calls": 0,
+    "type_counts": {
+      "unknown": 23,
+      "organization": 23,
+      "individual": 15
+    },
+    "identity_statuses_unchanged": true,
+    "source_relationship_activity_research_content_unchanged": true,
+    "interpretation": "Approximate account publisher form, manually correctable; not independently verified identity or affiliation"
+  },
+  "long_report_limit": {
+    "original_input_records": 601,
+    "reading_and_tool_work_reused": true,
+    "terminal_status": "failed",
+    "formal_report_saved": false,
+    "reason": "Final semantic review rejected missing profile-text mention coverage and incorrect citations for program execution metadata",
+    "saved_reading_fragments_evidence_notes_and_drafts_retained": true
+  },
+  "publication_boundary": "Installer construction, actual installation and data-preserving upgrade are separate proofs; this receipt does not claim an external download has succeeded.",
+  "private_database_profiles_keys_cookies_account_text_or_local_absolute_paths_included": false
+}
