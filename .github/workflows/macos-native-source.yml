@@ -33,7 +33,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
       # Root-approved public correction source-manifest digest; source commit remains a required input.
-      EXPECTED_MANIFEST_SHA256: 0e2014477878e27e2f80f01864ee636af61431dd69060375976f70f233e650ef
+      EXPECTED_MANIFEST_SHA256: f7792915e3c60185cc63d4c2cfb33780f52b46f4f1690392c181b386a12963aa
     steps:
       - name: Fetch the exact same-repository source commit
         env:
@@ -47,9 +47,9 @@ jobs:
                   raise ValueError('Only the explicitly authorized repository is supported')
               if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
                   raise ValueError('source_sha must be a full lowercase commit SHA')
-              if source_sha != 'fd836c6941756fd9262743309fc9fe4293a8185c':
+              if source_sha != '5a4d74509c7482beb042b3ad5837eb2a78d06ab3':
                   raise ValueError('Only the root-approved correction source commit is supported')
-              if tag != 'v2.0.0-fast-classification.20261012':
+              if tag != 'v2.0.0-fast-classification-fixed.20261012':
                   raise ValueError('Only the root-approved correction release tag is supported')
               if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
                   raise ValueError('Invalid release tag')
@@ -87,7 +87,7 @@ jobs:
               else:
                   raise SystemExit('Draft lookup exceeded the bounded release list')
               if not matches:
-                  if tag != 'v2.0.0-fast-classification.20261012':
+                  if tag != 'v2.0.0-fast-classification-fixed.20261012':
                       raise SystemExit('Only the explicitly requested correction draft may be created')
                   resolved = api('repos/' + repo + '/commits/' + source_sha)
                   if resolved.get('sha') != source_sha:
