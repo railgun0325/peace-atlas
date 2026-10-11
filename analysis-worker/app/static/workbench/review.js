@@ -1,11 +1,25 @@
 import { api } from './api.js';
 import { el, button, field, dialog, setContent, loading, errorBox, notify, number, sourceLink } from './ui.js';
+import { accountTypeName } from './network_model.js';
 
 const kinds = { accounts: '账号类型', claims: '关系主张', activities: '活动与举办地' };
 const outcomes = { organization: '组织', individual: '个人', unknown: '类型证据不足', confirmed: '已确认', rejected: '已排除', inconclusive: '证据不足' };
 const phases = { starting: '准备范围', investigating: 'DS 正在阅读与查找依据', classifying: 'DS 正在快速判定类型', saving: '保存本批决定', verifying_accounts: '程序核对准确账号回链', complete: '审核流程已完成' };
 const sourceCacheModes = [['reuse', '复用有效期内已保存来源（默认）'], ['refresh', '强制刷新'], ['off', '本次关闭']];
 const sourceCacheTTL = 3600;
+
+export function reviewOutcomeCounts(outcomeCounts = {}, { accountTypes = false, results = [] } = {}) {
+  const counts = Object.fromEntries(Object.entries(outcomeCounts || {}).map(([key, value]) => [key, Number(value || 0)]));
+  const personal = accountTypes ? counts.unknown || 0
+    : Math.min(counts.unknown || 0, results.filter(row => row.kind === 'accounts' && row.outcome === 'unknown').length);
+  if (personal) {
+    counts.individual = (counts.individual || 0) + personal;
+    counts.unknown -= personal;
+    if (!counts.unknown) delete counts.unknown;
+  }
+  if (accountTypes || counts.unknown === 0 && results.some(row => row.kind === 'accounts')) delete counts.unknown;
+  return counts;
+}
 
 function sourceCacheResults(cache) {
   if (!cache || typeof cache !== 'object') return null;
@@ -42,11 +56,11 @@ export function reviewResults(result = {}) {
   result = result || {};
   const fast = result.classification_version === 1;
   return el('section', { class: 'review-results' }, el('h3', {}, fast ? '账号类型粗分结果' : '自动审核与核验结果'), el('p', { role: 'status' }, reviewProgress(result)),
-    el('p', { class: 'field-hint' }, fast ? '仅按已保存名称、用户名和简介近似判定，可在账号列表或图谱详情手动更改。人工锁定类型不会被覆盖。' : '已完成表示全部指定内容已有审核结果。证据不足不等于属实；身份核验、账号类型、关系主张分别记录。原始资料保留，人工锁定类型不会被覆盖。'),
-    el('p', {}, Object.entries(result.outcomes || {}).map(([key, value]) => `${outcomes[key] || key} ${number(value)}`).join(' · ')),
+    el('p', { class: 'field-hint' }, fast ? '组织/个人粗分（可手动更改）。仅按已保存名称、用户名和简介近似判定，人工锁定类型不会被覆盖。' : '已完成表示全部指定内容已有审核结果。证据不足不等于属实；身份核验、账号类型、关系主张分别记录。原始资料保留，人工锁定类型不会被覆盖。'),
+    el('p', {}, Object.entries(reviewOutcomeCounts(result.outcomes, { accountTypes: fast, results: result.results || [] })).map(([key, value]) => `${outcomes[key] || key} ${number(value)}`).join(' · ')),
     sourceCacheResults(result.source_cache),
     el('ol', { class: 'relation-list' }, (result.results || []).map(row => el('li', {},
-      el('details', {}, el('summary', {}, `${kinds[row.kind] || row.kind} · ${outcomes[row.outcome] || row.outcome} · ${row.label || row.id.slice(0, 12)}`),
+      el('details', {}, el('summary', {}, `${kinds[row.kind] || row.kind} · ${(fast || row.kind === 'accounts') && ['organization', 'individual', 'unknown'].includes(row.outcome) ? accountTypeName({ account_type: row.outcome }) : outcomes[row.outcome] || row.outcome} · ${row.label || row.id.slice(0, 12)}`),
         el('p', {}, row.note), row.confidence && el('p', { class: 'field-hint' }, `分类把握：${({ high: '较有把握', medium: '一般把握', low: '低把握' })[row.confidence] || '低把握'}`), row.date && el('p', {}, `实际日期 ${row.date} · 举办地 ${row.prefecture || '无法定位'}`),
         (row.resolved_evidence || []).map(proof => el('div', {}, sourceLink(proof.url, '查看已核对出处'), el('blockquote', {}, proof.quote))))))));
 }
@@ -70,7 +84,7 @@ export function openFastClassification(ctx) {
   start.disabled = true;
   const invalidate = () => { version++; proof = null; start.disabled = true; setContent(preview); };
   batch.querySelector('input').addEventListener('input', invalidate); recheck.addEventListener('change', invalidate);
-  modal.body.append(el('p', {}, '类型粗分（可手动更改）。仅根据已保存的名称、用户名和公开简介判定组织、个人或未判定。'),
+  modal.body.append(el('p', {}, '组织/个人粗分（可手动更改）。仅根据已保存的名称、用户名和公开简介近似判定；不判定真实组织成员身份。'),
     el('p', { class: 'field-hint' }, '人工锁定类型会跳过。身份核验可另选“自动核验候选账号”。'), batch,
     el('label', { class: 'checkbox' }, recheck, '重新判定已有类型（仍跳过人工锁定）'), preview, errors);
   modal.footer.append(button('取消', modal.close, 'secondary'), button('预估范围与用时', async event => {

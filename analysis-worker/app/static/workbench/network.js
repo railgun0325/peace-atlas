@@ -5,7 +5,7 @@ import { readDraft } from './drafts.js';
 import { interactiveGraph } from './interactive_graph.js';
 import { renderRegistry, openResearchRelevance } from './registry.js';
 import { accountTypeControls } from './account_type.js';
-import { relationshipNames, nodeStateNames, accountState, accountTypeInfo, accountTypeBasisName, researchRelevance, explicitResearchRoots, selectGraph, selectResearchGraph, discoveryForest, graphPositions } from './network_model.js';
+import { relationshipNames, nodeStateNames, accountState, accountTypeNames, accountTypeInfo, accountTypeBasisName, researchRelevance, explicitResearchRoots, selectGraph, selectResearchGraph, discoveryForest, graphPositions } from './network_model.js';
 import { openResearchResume, frontierRecoveryStatus } from './research_resume.js';
 import { continuationState } from './research_resume_model.js';
 
@@ -81,10 +81,11 @@ export async function renderNetwork(ctx) {
   const queryInput = el('input', { type: 'search', placeholder: '查找账号或用户名', 'aria-label': '查找网络中的账号', onInput: event => { filters.query = event.target.value; drawGraph(); } });
   const platformSelect = el('select', { 'aria-label': '筛选平台', onChange: event => { filters.platform = event.target.value; drawGraph(); } }, el('option', { value: '' }, '所有平台'), el('option', { value: 'twitter' }, 'Twitter / X'), el('option', { value: 'instagram' }, 'Instagram'));
   const relationshipSelect = el('select', { 'aria-label': '筛选关系类型', onChange: event => { filters.relationship = event.target.value; drawGraph(); } });
+  const typeSelect = el('select', { 'aria-label': '筛选账号类型', onChange: event => { filters.accountType = event.target.value; drawGraph(); } }, el('option', { value: '' }, '全部类型'), Object.entries(accountTypeNames).map(([value, label]) => el('option', { value }, label)));
   const depthSelect = el('select', { 'aria-label': '显示层级', onChange: event => { filters.maxDepth = Number(event.target.value); drawGraph(); } }, el('option', { value: filters.maxDepth }, '所有层级'), Array.from({ length: filters.maxDepth }, (_, value) => value).map(value => el('option', { value }, `显示到第 ${value} 层`)));
   const treeButton = button('发现树', () => { view = 'tree'; drawGraph(); }, 'secondary small');
   const graphButton = button('关系网络', () => { view = 'graph'; drawGraph(); }, 'secondary small');
-  const tools = el('div', { class: 'network-toolbar' }, el('div', { class: 'network-view-switch' }, treeButton, graphButton), queryInput, platformSelect, relationshipSelect, depthSelect);
+  const tools = el('div', { class: 'network-toolbar' }, el('div', { class: 'network-view-switch' }, treeButton, graphButton), queryInput, platformSelect, relationshipSelect, typeSelect, depthSelect);
   stage.append(el('section', { class: 'network-canvas' }, tools, tree, visual), inspector);
   content.append(linkButton('← 返回研究工作台', '#network', 'text small'), head, recovery, errors, stats, stage, claims, decisions, sources);
 

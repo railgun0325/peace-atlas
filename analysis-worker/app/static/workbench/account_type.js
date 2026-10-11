@@ -27,7 +27,7 @@ export function accountTypeControls(ctx, account, refresh) {
     } catch (error) { if (!ctx.signal?.aborted) setContent(errors, errorBox(error)); }
     finally { saving = false; actions.querySelectorAll('button').forEach(control => { control.disabled = false; }); }
   }
-  for (const [type, label] of [['organization', '设为组织'], ['individual', '设为个人'], ['unknown', '设为未判定']]) {
+  for (const [type, label] of [['organization', '设为组织'], ['individual', '设为个人']]) {
     const control = button(label, () => save(type), 'secondary small');
     control.setAttribute('aria-pressed', String(info.type === type && info.manual_locked)); actions.append(control);
   }
@@ -41,5 +41,5 @@ export function accountTypeControls(ctx, account, refresh) {
     finally { saving = false; actions.querySelectorAll('button').forEach(control => { control.disabled = false; }); }
   }, 'text small'));
   return el('div', { class: 'account-type-correction' }, actions,
-    el('p', { class: 'field-hint' }, '类型粗分可手动更改；更改后锁定，不影响身份核验。'), errors);
+    el('p', { class: 'field-hint' }, '组织/个人粗分（可手动更改）；更改后锁定，不影响身份核验。'), errors);
 }

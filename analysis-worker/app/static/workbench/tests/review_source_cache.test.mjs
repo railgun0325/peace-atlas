@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openAutoReview, reviewResults } from '../review.js';
+import { openAccountTypeCorrection, openVerificationSources } from '../registry.js';
 
 // Exercise the actual dialog callbacks and API serialization without a browser,
 // local service, model connection, or formal profile.
@@ -201,4 +202,60 @@ test('internal shadow comparisons are not exposed as ordinary reuse hits', t => 
   const view = reviewResults(cacheResult({ mode: 'shadow', persistent_hits: 0, shadow_hits: 17 }));
   assert.doesNotMatch(view.textContent, /shadow|17/i);
   assert.match(view.textContent, /跨任务复用 0 次/);
+});
+
+test('manual correction offers two types for legacy unknown and persists personal as a manual lock without identity changes', async t => {
+  const body = installDOM(t), requests = [];
+  let refreshed = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+    return response({ account_type: 'individual', account_status: 'candidate' });
+  });
+  openAccountTypeCorrection({}, { account_id: 'legacy', account_type: 'unknown' }, () => { refreshed++; });
+  const modal = body.querySelector('dialog'), select = modal.querySelector('select[name=account_type]');
+  assert.deepEqual(select.children.map(option => [option.value, option.textContent]), [['organization', '组织'], ['individual', '个人']]);
+  assert.equal(select.value, 'individual');
+  await modal.querySelectorAll('button').find(control => control.textContent === '保存人工类型').fire('click');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0], { url: '/api/v2/accounts/legacy/identity', method: 'PATCH', body: {
+    type: 'individual', manual_locked: true, note: '', evidence_urls: [] } });
+  // The callback uses the saved API response; no public verification request occurs.
+  assert.equal(refreshed, 1);
+});
+
+test('verification source type selector has organization and personal only and its exact-link registration stays separate', async t => {
+  const body = installDOM(t), requests = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+    return response({});
+  });
+  openVerificationSources({}, { account_id: 'legacy', metadata: { verification_sources: [
+    { url: 'https://example.org/about', label: '来源', account_type: 'unknown' }] } }, () => {});
+  const modal = body.querySelector('dialog'), select = modal.querySelector('select[name=verification_type_1]');
+  assert.deepEqual(select.children.map(option => [option.value, option.textContent]), [['organization', '组织'], ['individual', '个人']]);
+  assert.equal(select.value, 'individual');
+  await modal.querySelectorAll('button').find(control => control.textContent === '保存核验来源').fire('click');
+  assert.deepEqual(requests, [{ url: '/api/v2/accounts/legacy/verification-sources', method: 'PUT', body: {
+    sources: [{ url: 'https://example.org/about', label: '来源', account_type: 'individual' }] } }]);
+});
+
+test('fast result rendering folds legacy unknown into a single personal count without granting verification', t => {
+  installDOM(t);
+  const view = reviewResults({ classification_version: 1, outcomes: { organization: 2, individual: 3, unknown: 4 }, results: [] });
+  assert.match(view.textContent, /组织\/个人粗分（可手动更改）/);
+  assert.match(view.textContent, /组织 2 · 个人 7/);
+  assert.doesNotMatch(view.textContent, /个人 3|未判定|类型证据不足|已核验/);
+});
+
+test('historical strict review maps account unknown to personal while claim and activity evidence outcomes remain separate', t => {
+  installDOM(t);
+  const view = reviewResults({ review_version: 1, outcomes: { individual: 1, unknown: 1, inconclusive: 2 }, results: [
+    { id: 'account', kind: 'accounts', outcome: 'unknown', label: 'legacy', note: '账号类型依据不足' },
+    { id: 'claim', kind: 'claims', outcome: 'inconclusive', label: 'claim', note: '关系证据不足' },
+    { id: 'activity', kind: 'activities', outcome: 'inconclusive', label: 'activity', note: '活动证据不足' }] });
+  assert.match(view.textContent, /个人 2 · 证据不足 2/);
+  assert.match(view.textContent, /账号类型 · 个人 · legacy/);
+  assert.match(view.textContent, /关系主张 · 证据不足 · claim/);
+  assert.match(view.textContent, /活动与举办地 · 证据不足 · activity/);
+  assert.doesNotMatch(view.textContent, /类型证据不足/);
 });

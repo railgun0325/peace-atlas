@@ -1,7 +1,7 @@
 import { api, pathId } from './api.js';
 import { el, heading, button, linkButton, field, loading, empty, errorBox, setContent, sourceLink, badge, dateText, dialog, notify } from './ui.js';
 import { interactiveGraph } from './interactive_graph.js';
-import { selectGraph, selectResearchGraph, researchRelevance, relationshipNames, accountTypeInfo, accountTypeBasisName } from './network_model.js';
+import { selectGraph, selectResearchGraph, researchRelevance, relationshipNames, accountTypeNames, accountTypeInfo, accountTypeBasisName } from './network_model.js';
 import { openAccountEdit } from './actions.js';
 import { openAccountRelations } from './social.js';
 import { accountTypeControls } from './account_type.js';
@@ -33,10 +33,10 @@ function independentSourceURL(value) {
 
 export function openAccountTypeCorrection(ctx, node, refresh) {
   const info = accountTypeInfo(node), modal = dialog('人工更正账号类型', { subtitle: 'ACCOUNT TYPE / MANUAL EVIDENCE' });
-  const type = field('账号类型', { name: 'account_type', value: info.type, options: [['unknown', '未判定'], ['organization', '组织'], ['individual', '个人']] });
+  const type = field('账号类型', { name: 'account_type', value: info.type, options: Object.entries(accountTypeNames) });
   const note = field('人工核对说明', { name: 'identity_note', type: 'textarea', value: info.note, maxlength: 1000 });
   const evidence = field('类型依据链接（每行一条）', { name: 'identity_evidence', type: 'textarea', value: info.evidence_urls.join('\n'), rows: 3,
-    hint: '最多 5 条独立公开 HTTPS 页面。可留空；没有充分依据时选择“未判定”。' });
+    hint: '最多 5 条独立公开 HTTPS 页面。可留空；组织/个人粗分与身份核验分别保存。' });
   const locked = el('input', { type: 'checkbox', checked: true, name: 'identity_locked' });
   const errors = el('div');
   modal.body.append(el('p', {}, '人工登记类型与身份核验分别保存。类型更正不会把账号变为已核验，也不证明组织隶属。'), type, note, evidence,
@@ -62,15 +62,15 @@ export function openVerificationSources(ctx, node, refresh) {
     const index = rows.length + 1;
     const url = field(`核验官网链接 ${index}`, { name: `verification_url_${index}`, type: 'url', value: source.url || '', maxlength: 2048 });
     const label = field(`来源说明 ${index}`, { name: `verification_label_${index}`, value: source.label || '', maxlength: 200 });
-    const type = field(`来源对应的账号类型 ${index}`, { name: `verification_type_${index}`, value: source.account_type || 'unknown',
-      options: [['unknown', '未判定'], ['organization', '已人工核对为组织'], ['individual', '已人工核对为个人']] });
+    const type = field(`来源对应的账号类型 ${index}`, { name: `verification_type_${index}`, value: source.account_type === 'organization' ? 'organization' : 'individual',
+      options: Object.entries(accountTypeNames) });
     rows.push({ url, label, type }); list.append(el('fieldset', { class: 'field-set' }, el('legend', {}, `公开官网依据 ${index}`), url, label, type));
   }
   existing.forEach(addRow); if (rows.length < 5) addRow();
   const more = button('增加官网来源', () => { if (rows.length < 5) addRow(); more.disabled = rows.length >= 5; }, 'secondary small');
   more.disabled = rows.length >= 5;
   modal.body.append(el('p', {}, '只登记你已核对的独立公开官网。保存后后台会检查该页面是否准确回链到此账号；登记来源本身不授予已核验状态。'),
-    el('p', { class: 'field-hint' }, '最多 5 项。空链接不会保存；清空原有链接会移除该项来源。来源类型默认“未判定”，仅在有依据时人工选择组织或个人。'), list, more, errors);
+    el('p', { class: 'field-hint' }, '最多 5 项。空链接不会保存；清空原有链接会移除该项来源。账号类型按组织/个人粗分，身份核验仍须准确账号回链依据。'), list, more, errors);
   modal.footer.append(button('取消', modal.close, 'secondary'), button('保存核验来源', async event => {
     const control = event.currentTarget; control.disabled = true;
     try {
@@ -116,6 +116,7 @@ export async function renderRegistry(ctx) {
   const search = field('查找账号', { name: 'query', type: 'search', value: ctx.params.get('query') || '', placeholder: '名称或用户名' });
   const platform = field('平台', { name: 'platform', options: [['', '所有平台'], ['twitter', 'Twitter / X'], ['instagram', 'Instagram']] });
   const relationship = field('关系类型', { name: 'relationship', options: [['', '全部已观察关系'], ...Object.entries(relationshipNames)] });
+  const typeFilter = field('账号类型', { name: 'account_type_filter', options: [['', '全部类型'], ...Object.entries(accountTypeNames)] });
   const positions = new Map();
   const viewportState = {};
   let graphController = null, dragging = null, dirty = false, refreshing = false, selectedEdge = '';
@@ -151,7 +152,7 @@ export async function renderRegistry(ctx) {
   }
   function inspectEdge(edge) { selectedKey = ''; selectedEdge = edgeKey(edge); setContent(inspector, el('span', { class: 'eyebrow' }, 'OBSERVED CONNECTION / SOURCE'), el('h2', {}, relationshipNames[edge.relationship] || edge.relationship), el('p', {}, `${edge.source_key} → ${edge.target_key}`), el('p', { class: 'field-hint' }, edge.relationship === 'mentions' ? '保存的原帖中明确出现目标账号提及；提及不证明合作或隶属。' : '来自公开页面中实际观察并保存的关系。'), edge.evidence_quote && el('blockquote', {}, edge.evidence_quote), edge.evidence_urls.map(url => sourceLink(url, '关系依据')), edge.run_id && linkButton('查看原研究', `#network?run=${pathId(edge.run_id)}`, 'secondary small')); showInspector(); }
   function draw() {
-    const visible = selectResearchGraph(selectGraph(graph, { query: search.querySelector('input').value, platform: platform.querySelector('select').value, relationship: relationship.querySelector('select').value }), { showGeneral: viewportState.showGeneral === true });
+    const visible = selectResearchGraph(selectGraph(graph, { query: search.querySelector('input').value, platform: platform.querySelector('select').value, relationship: relationship.querySelector('select').value, accountType: typeFilter.querySelector('select').value }), { showGeneral: viewportState.showGeneral === true });
     const sources = graph.coverage_metadata?.sources || {};
     const sourceNames = { account_relations: '公开关注来源', research_relations: '研究关系来源', social_posts: '原帖来源' };
     setContent(stats, el('div', {}, el('strong', { class: 'mono' }, graph.total_nodes), el('span', {}, '保存账号')), el('div', {}, el('strong', { class: 'mono' }, `${graph.total_edges_exact === false ? '至少 ' : ''}${graph.total_edges}`), el('span', {}, '已汇总有来源的关系')), el('div', {}, el('strong', { class: 'mono' }, visible.nodes.length), el('span', {}, '当前显示')));
@@ -172,8 +173,8 @@ export async function renderRegistry(ctx) {
     catch (error) { if (!ctx.signal.aborted) setContent(errors, errorBox(error)); }
     finally { refreshing = false; }
   }
-  for (const control of [search, platform, relationship]) control.querySelector('input,select').addEventListener(control === search ? 'input' : 'change', draw);
-  content.append(stats, notice, el('div', { class: 'filter-panel form-grid' }, search, platform, relationship, button('刷新关系数据', async event => { event.currentTarget.disabled = true; try { await refreshData(); } finally { event.currentTarget.disabled = false; } }, 'secondary small')), errors, stage);
+  for (const control of [search, platform, relationship, typeFilter]) control.querySelector('input,select').addEventListener(control === search ? 'input' : 'change', draw);
+  content.append(stats, notice, el('div', { class: 'filter-panel form-grid' }, search, platform, relationship, typeFilter, button('刷新关系数据', async event => { event.currentTarget.disabled = true; try { await refreshData(); } finally { event.currentTarget.disabled = false; } }, 'secondary small')), errors, stage);
   ctx.poll(() => document.hidden ? Promise.resolve() : refreshData(), 5000);
   draw(); return content;
 }

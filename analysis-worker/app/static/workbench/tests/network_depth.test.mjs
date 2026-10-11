@@ -8,13 +8,30 @@ const graph = { nodes: ['a', 'b', 'c', 'd', 'x'].map(key => node(key)),
   edges: [edge('a', 'b'), edge('b', 'c'), edge('c', 'd'), edge('x', 'a'), edge('a', 'd', 'mentions')] };
 
 test('account type never derives from verification, name or a following relation', () => {
-  assert.equal(model.accountType(node('a', { account_status: 'verified', name: 'Official Association' })), 'unknown');
+  assert.equal(model.accountType(node('a', { account_status: 'verified', name: 'Official Association' })), 'individual');
   assert.equal(model.accountType(node('a', { account_type: 'organization', account_status: 'candidate' })), 'organization');
   assert.equal(model.accountType(node('a', { account_type: 'individual', account_status: 'excluded' })), 'individual');
-  assert.equal(model.accountType(node('a', { account_type: 'ORGANIZATION' })), 'unknown');
+  assert.equal(model.accountType(node('a', { account_type: 'ORGANIZATION' })), 'individual');
   assert.equal(model.accountTypeName({ account_type: 'organization' }), '组织');
   assert.equal(model.accountTypeName({ account_type: 'individual' }), '个人');
-  assert.equal(model.accountTypeName({}), '未判定');
+  assert.equal(model.accountTypeName({}), '个人');
+});
+
+test('legacy unknown and missing types share personal display, counts and graph filters without changing storage or identity', () => {
+  const nodes = [node('org', { account_type: 'organization', account_status: 'candidate' }),
+    node('person', { account_type: 'individual', account_status: 'verified' }),
+    node('legacy', { account_type: 'unknown', account_status: 'candidate' }), node('missing')];
+  const graph = { nodes, edges: [edge('person', 'legacy'), edge('org', 'legacy'), edge('legacy', 'missing')] };
+  const original = JSON.stringify(graph);
+  assert.deepEqual(model.accountTypeNames, { organization: '组织', individual: '个人' });
+  assert.deepEqual(model.accountTypeCounts(nodes), { organization: 1, individual: 3 });
+  const visible = model.selectGraph(graph, { accountType: 'individual' });
+  assert.deepEqual(visible.nodes.map(value => value.account_key), ['person', 'legacy', 'missing']);
+  assert.deepEqual(visible.edges.map(value => [value.source_key, value.target_key]), [['person', 'legacy'], ['legacy', 'missing']]);
+  assert.deepEqual(model.selectGraph(graph, { accountType: 'organization' }).nodes.map(value => value.account_key), ['org']);
+  assert.equal(model.accountStateName(nodes[1]), '已核验');
+  assert.equal(model.accountStateName(nodes[2]), '候选账号');
+  assert.equal(JSON.stringify(graph), original);
 });
 test('type evidence is separate, remains public and cannot grant verified status', () => {
   const value = node('a', { account_type: 'individual', type_basis: 'public_profile_statement',
@@ -136,7 +153,7 @@ test('degree counts distinct observed neighbours and never manufactures identity
   assert.equal(metric.degree, 1); assert.equal(metric.out_degree, 1); assert.equal(metric.in_degree, 0);
   assert.equal(metric.structural_bridge, false);
   assert.equal(model.accountStateName(data.nodes[0]), '候选账号');
-  assert.equal(model.accountType(data.nodes[0]), 'unknown');
+  assert.equal(model.accountType(data.nodes[0]), 'individual');
   assert.ok(!('affiliation' in metric));
 });
 test('structural scope warns when displayed nodes are a subset of saved totals', () => {
@@ -165,7 +182,8 @@ test('projected type details take precedence, preserve lock semantics and use hu
 });
 test('an unrelated saved following link is not described as type evidence when no type basis exists', () => {
   assert.deepEqual(model.accountTypeInfo({ evidence_urls: ['https://example.org/following'] }).evidence_urls, []);
-  assert.equal(model.accountType({ metadata: { account_identity: { type: 'organization' } } }), 'unknown');
+  assert.equal(model.accountType({ metadata: { account_identity: { type: 'organization' } } }), 'individual');
+  assert.deepEqual(model.accountTypeInfo({ account_type: 'unknown', type_basis: 'insufficient_source', evidence_urls: ['https://example.org/following'] }).evidence_urls, []);
 });
 test('server structure explanations apply only to exactly matching observed structure', () => {
   const data = { nodes: ['a', 'b', 'c'].map(key => node(key)), edges: [edge('a', 'b'), edge('b', 'c'), edge('c', 'a')] };

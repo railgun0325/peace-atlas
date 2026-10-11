@@ -7,9 +7,9 @@ export function accountState(node = {}) {
 export function accountStateName(node) {
   return { verified: '已核验', excluded: '已排除', candidate: '候选账号' }[accountState(node)];
 }
-export function selectGraph(graph, { query = '', platform = '', relationship = '', maxDepth = 3 } = {}) {
+export function selectGraph(graph, { query = '', platform = '', relationship = '', accountType: type = '', maxDepth = 3 } = {}) {
   const term = query.toLocaleLowerCase();
-  let nodes = (graph.nodes || []).filter(node => (!platform || node.platform === platform) && Number(node.depth || 0) <= maxDepth && (!term || [node.name, node.handle, node.account_key].join(' ').toLocaleLowerCase().includes(term)));
+  let nodes = (graph.nodes || []).filter(node => (!platform || node.platform === platform) && (!type || accountType(node) === type) && Number(node.depth || 0) <= maxDepth && (!term || [node.name, node.handle, node.account_key].join(' ').toLocaleLowerCase().includes(term)));
   if (relationship) {
     const related = new Set((graph.edges || []).filter(edge => edge.relationship === relationship).flatMap(edge => [edge.source_key, edge.target_key]));
     nodes = nodes.filter(node => related.has(node.account_key));
@@ -47,12 +47,17 @@ export function graphPositions(nodes) {
   return { positions, width: Math.max(680, 260 + Math.max(0, ...levels.keys()) * 244), height: Math.max(430, 70 + Math.max(0, ...[...levels.values()].map(layer => layer.length)) * 91) };
 }
 
-export const accountTypeNames = { organization: '组织', individual: '个人', unknown: '未判定' };
+export const accountTypeNames = { organization: '组织', individual: '个人' };
 export const graphTierNames = { core: '重点', bridge: '桥接', peripheral: '外围' };
 export function accountType(node = {}) {
-  return Object.hasOwn(accountTypeNames, node.account_type) ? node.account_type : 'unknown';
+  return node.account_type === 'organization' ? 'organization' : 'individual';
 }
 export function accountTypeName(node) { return accountTypeNames[accountType(node)]; }
+export function accountTypeCounts(nodes = []) {
+  const counts = { organization: 0, individual: 0 };
+  for (const node of nodes) counts[accountType(node)]++;
+  return counts;
+}
 export function publicEvidenceURLs(value = {}) {
   const result = new Set();
   for (const candidate of [...(Array.isArray(value.evidence_urls) ? value.evidence_urls : []), value.evidence_url]) {
@@ -66,7 +71,7 @@ export function publicEvidenceURLs(value = {}) {
 }
 export function accountTypeInfo(node = {}) {
   const details = node.account_type_details || {};
-  const legacyEvidence = accountType(node) !== 'unknown' && typeof node.type_basis === 'string' && node.type_basis
+  const legacyEvidence = ['organization', 'individual'].includes(node.account_type) && typeof node.type_basis === 'string' && node.type_basis
     ? node.evidence_urls : [];
   return { type: accountType(node), label: accountTypeName(node),
     basis: typeof details.basis === 'string' ? details.basis : typeof node.type_basis === 'string' ? node.type_basis : '',

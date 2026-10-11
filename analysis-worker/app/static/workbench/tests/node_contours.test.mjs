@@ -20,18 +20,10 @@ test('individual outer contour stays circular at the exact solver radius', () =>
   }
 });
 
-test('unknown and unsupported types use four centered diamond vertices inside the solver radius', () => {
+test('legacy unknown, missing and unsupported types share the personal circular contour', () => {
   for (const type of ['unknown', undefined, 'organization-name-only']) {
     for (const radius of [5, 8, 12, 17]) {
-      const { tag, attrs } = graphNodeContour(type, radius);
-      assert.equal(tag, 'path');
-      const numbers = attrs.d.match(/-?\d+(?:\.\d+)?/g).map(Number);
-      assert.equal(numbers.length, 8);
-      const vertices = Array.from({ length: 4 }, (_, i) => numbers.slice(i * 2, i * 2 + 2));
-      assert.equal(new Set(vertices.map(pair => pair.join(','))).size, 4);
-      assert.ok(vertices.every(([x, y]) => Math.hypot(x, y) === radius && (x === 0 || y === 0)));
-      assert.equal(vertices.reduce((sum, pair) => sum + pair[0], 0), 0);
-      assert.equal(vertices.reduce((sum, pair) => sum + pair[1], 0), 0);
+      assert.deepEqual(graphNodeContour(type, radius), { tag: 'circle', attrs: { r: radius } });
     }
   }
 });

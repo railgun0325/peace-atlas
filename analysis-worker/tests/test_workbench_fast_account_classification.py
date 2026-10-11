@@ -229,7 +229,7 @@ def test_nonstop_failure_persists_only_safe_diagnostics_and_no_account_writes(st
     assert [store.get_account(row['id']) for row in accounts] == before
 
 
-@pytest.mark.parametrize('mutation', ['duplicate', 'missing', 'invented', 'non_string', 'extra', 'empty_reason', 'invalid_type'])
+@pytest.mark.parametrize('mutation', ['duplicate', 'missing', 'invented', 'non_string', 'extra', 'empty_reason', 'invalid_type', 'legacy_unknown'])
 def test_invalid_structured_response_is_not_coerced_or_partially_saved(store, mutation):
     seed(store); seed(store, 'second')
     rows = fast.classification_snapshot(store, fast.ClassificationArgs())
@@ -241,6 +241,7 @@ def test_invalid_structured_response_is_not_coerced_or_partially_saved(store, mu
     elif mutation == 'extra': values[0]['evidence_url'] = 'https://example.org'
     elif mutation == 'empty_reason': values[0]['reason'] = ' '
     elif mutation == 'invalid_type': values[0]['type'] = 'verified'
+    elif mutation == 'legacy_unknown': values[0]['type'] = 'unknown'
     with pytest.raises(PipelineError):
         fast.apply_classifications(store, rows, values)
     assert all(not store.get_account(row['id'])['metadata'].get('account_identity') for row in rows)
@@ -330,6 +331,7 @@ def test_agent_fast_preview_execute_schema_needs_review_scope_and_not_harness(tm
             monkeypatch.setattr(server.pipeline, 'capabilities', lambda: {'llm': {'model': 'MockGateway', 'configured': True}, 'analysis_harness': {'available': False}})
             schema = (await client.get('/agents/v1/schema')).json()['operations']['classify.start']
             assert schema['scope'] == 'review' and schema['may_read_public_network'] is False and schema['identity_verification'] is False
+            assert schema['classification_types'] == ['organization', 'individual']
             plan = await preview(client, headers, 'classify.start', {'batch_size': 100})
             assert plan['preview']['total'] == 1 if 'preview' in plan else plan['result']['total'] == 1
             response = await client.post('/agents/v1/execute', headers=headers, json=execution(plan, 'fast-type-001'))
@@ -348,6 +350,87 @@ def test_strict_evidence_review_still_requires_evidence_and_does_not_accept_fast
                           'identity': {'type': 'organization', 'note': 'Just a model guess'}}]}
     with pytest.raises(ValueError, match='独立公开来源'): preview_batch(store, values)
     assert not store.get_account(row['id'])['metadata'].get('account_identity')
+
+
+def test_binary_profile_fixture_distinguishes_collective_publisher_from_group_mention(store, monkeypatch):
+    """Exercise the actual request and persistence contract, not real-model accuracy."""
+    from app.workbench import query_plan
+    profiles = [
+        ('shunicirou', '吉美駿一郎', '', 'individual', 'medium', '姓名式名称，未见组织发布线索'),
+        ('gfyyrnb0djrqflj', 'gfyyrnb0djrqflj', '', 'individual', 'low', '未见组织发布线索，暂归个人'),
+        ('douroutiba', 'dorosien', '動労千葉を支援する会', 'individual', 'low', '支援团体的提及未说明账号以团体名义运营'),
+        ('ab_random123', '公开资料研究会', '公开资料研究会が共同運営する団体の発信窓口です。',
+         'organization', 'high', '团体名称与简介明确集体运营的发布渠道'),
+    ]
+    accounts = [seed(store, handle, name=name, bio=bio) for handle, name, bio, *_ in profiles]
+    before = {row['id']: copy.deepcopy(store.get_account(row['id'])) for row in accounts}
+    expected = {handle: (name, bio, kind, confidence, reason)
+                for handle, name, bio, kind, confidence, reason in profiles}
+    calls = []
+    native = httpx.AsyncClient
+
+    def handler(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        assert payload['reasoning_effort'] == 'none' and 'tools' not in payload
+        assert payload['messages'][0]['content'].startswith(fast.SYSTEM)
+        assert '仅提到组织、支持某组织、自称成员或前成员' in payload['messages'][0]['content']
+        sent = json.loads(payload['messages'][1]['content'])['accounts']
+        assert len(sent) == len(profiles)
+        result = []
+        for row in sent:
+            assert set(row) == {'id', 'display_name', 'handle', 'public_bio'}
+            name, bio, kind, confidence, reason = expected[row['handle']]
+            assert (row['display_name'], row['public_bio']) == (name, bio)
+            result.append({'id': row['id'], 'type': kind, 'confidence': confidence, 'reason': reason})
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop',
+            'message': {'content': json.dumps({'classifications': result})}}]})
+
+    monkeypatch.setattr(query_plan.httpx, 'AsyncClient', lambda **options: native(
+        transport=httpx.MockTransport(handler), **options))
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'synthetic-binary-fixture-only')
+    monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
+    monkeypatch.setenv('DEEPSEEK_MODEL', 'deepseek-flash')
+    job = job_for(store)
+    asyncio.run(JobRunner(store)._execute(job))
+    saved = store.get_job(job['id'])
+    assert saved['status'] == 'succeeded' and saved['result']['completed'] == 4
+    assert len(calls) == 1 and saved['result']['tool_calls'] == 0
+    assert saved['result']['outcomes'] == {'organization': 1, 'individual': 3}
+    for account in accounts:
+        current = store.get_account(account['id'])
+        kind = expected[account['handle']][2]
+        assert describe_identity(current)['account_type'] == kind
+        assert current['metadata']['account_identity']['basis'] == fast.BASIS
+        assert {key: value for key, value in current.items() if key not in {'metadata', 'updated_at'}} == {
+            key: value for key, value in before[account['id']].items() if key not in {'metadata', 'updated_at'}}
+        assert {key: value for key, value in current['metadata'].items() if key != 'account_identity'} == before[account['id']]['metadata']
+    assert store.list_jobs()['total'] == 1  # No identity check, public-web read or membership grant.
+
+
+def test_legacy_unknown_checkpoint_resumes_without_reclassifying_committed_or_saved_decisions(store):
+    first, second = seed(store), seed(store, 'second')
+    job = job_for(store, batch_size=1)
+    rows = job['params']['classification_snapshot']
+    initial, remaining = rows[:1], rows[1:]
+    # An earlier three-type release could persist unknown in both completed and
+    # not-yet-committed decisions. Keep that historical receipt unchanged.
+    saved = fast.apply_classifications(store, initial, output(initial, type='unknown'), _saved_legacy=True)
+    store.update_job(job['id'], status='cancelled', result={
+        'classification_version': 1, 'classification_basis': fast.BASIS,
+        'snapshot_digest': job['params']['snapshot_digest'], 'total': 2, 'completed': 1,
+        'results': saved, 'batches': [{'input_digest': fast.digest(initial), 'count': 1, 'tool_calls': 0}],
+        'model_calls': 2, 'tool_calls': 0, 'phase': 'saving',
+        'current_classification': {'batch_digest': fast.digest(remaining), 'decisions': output(remaining, type='unknown')}})
+    child = store.retry_job(job['id'])
+    gateway = MockGateway()
+    result = run(store, child, gateway)
+    assert result['completed'] == 2 and result['complete'] is True and not gateway.calls
+    assert all(row['outcome'] == 'unknown' for row in result['results'])
+    assert all(describe_identity(store.get_account(row['id']))['account_type'] == 'unknown' for row in (first, second))
+    # Legacy checkpoint acceptance never widens the new model-output contract.
+    with pytest.raises(PipelineError):
+        fast.validate_classifications({'classifications': output(remaining, type='unknown')}, remaining)
 
 
 def test_invalid_resume_result_is_rejected_before_any_model_call(store):

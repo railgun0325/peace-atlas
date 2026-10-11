@@ -22,7 +22,7 @@ document.getElementById('main').replaceChildren(await renderNetwork(ctx));
 
 
 def fixture():
-    types = [('organization', '组织'), ('individual', '个人'), ('unknown', '未判定')]
+    types = [('organization', '组织'), ('individual', '个人'), ('unknown', '旧数据个人')]
     nodes = [{'account_key': f'twitter:{kind}_{status}', 'account_id': f'{kind}_{status}',
               'platform': 'twitter', 'handle': f'{kind}_{status}', 'name': label + (' · 已核验' if status == 'verified' else ' · 候选'),
               'account_type': kind, 'account_status': status, 'depth': 0, 'url': f'https://x.com/{kind}_{status}'}
@@ -98,11 +98,15 @@ def main():
                 page.locator('.interactive-svg').scroll_into_view_if_needed()
                 observed = appearance(page)
                 appearances.append({'entry': entry, 'nodes': observed})
-                expected = {'organization': ('rect', 'rgb(73, 109, 93)'), 'individual': ('circle', 'rgb(155, 102, 52)'), 'unknown': ('path', 'rgb(108, 118, 134)')}
+                expected = {'organization': ('rect', 'rgb(73, 109, 93)'), 'individual': ('circle', 'rgb(155, 102, 52)')}
+                fixture_kinds = ('organization', 'individual', 'unknown')
+                raw_types = {node['account_key']: node['account_type'] for node in graph['nodes']}
                 for node in observed:
-                    shape, fill = expected[node['type']]
-                    if node['shape'] != shape or node['halo'] != shape or node['fill'] != fill:
-                        violations.append({'entry': entry, 'node': node, 'expected': {'shape': shape, 'fill': fill}})
+                    normalized = 'organization' if raw_types[node['key']] == 'organization' else 'individual'
+                    shape, fill = expected[normalized]
+                    label = '组织' if normalized == 'organization' else '个人'
+                    if node['type'] != normalized or node['shape'] != shape or node['halo'] != shape or node['fill'] != fill or f'，{label}，' not in node['aria']:
+                        violations.append({'entry': entry, 'node': node, 'expected': {'type': normalized, 'shape': shape, 'fill': fill, 'aria_type': label}})
                     if node['check'] != int(node['verified']):
                         violations.append({'entry': entry, 'verification_mark': node})
                 for view, size in [('desktop', {'width': 1440, 'height': 1000}), ('small', {'width': 390, 'height': 844})]:
@@ -121,10 +125,10 @@ def main():
                 # full contour inspectable without horizontal page overflow.
                 for _ in range(3):
                     page.get_by_role('button', name='放大', exact=True).click()
-                for kind in expected:
+                for kind in fixture_kinds:
                     node = page.locator(f'.network-node[data-key="twitter:{kind}_candidate"]')
                     node.locator('.network-node-dot').hover()
-                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected[kind][1]
+                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected['organization' if kind == 'organization' else 'individual'][1]
                 page.locator('.interactive-network').screenshot(path=str(args.output / f'{entry}-small-zoomed-graph.png'))
                 page.get_by_label('关注方向', exact=True).select_option('out')
                 page.get_by_label('关系跳数', exact=True).select_option('2')
@@ -145,15 +149,15 @@ def main():
                 cases.append({'name': entry + '_small_zoom_hover_drag_and_filter', 'ok': True})
                 page.set_viewport_size({'width': 1440, 'height': 1000})
                 page.get_by_role('button', name='适应画布', exact=True).click()
-                for kind in expected:
+                for kind in fixture_kinds:
                     node = page.locator(f'.network-node[data-key="twitter:{kind}_candidate"]')
                     node.locator('.network-node-dot').hover()
                     expect(node).to_have_class(__import__('re').compile(r'.*highlighted.*'))
-                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected[kind][1]
+                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected['organization' if kind == 'organization' else 'individual'][1]
                     assert page.locator('.network-edge.highlighted').count() > 0
                     node.focus(); page.keyboard.press('Enter')
                     expect(node).to_have_attribute('aria-pressed', 'true')
-                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected[kind][1]
+                    assert node.locator('.network-node-dot').evaluate('n=>getComputedStyle(n).fill') == expected['organization' if kind == 'organization' else 'individual'][1]
                     expect(page.locator('.network-inspector')).to_contain_text(node.get_attribute('data-key'))
                     if entry == 'registry':
                         page.get_by_role('button', name='收起详情', exact=True).click()
@@ -176,7 +180,7 @@ def main():
                 page.get_by_label('关系跳数', exact=True).select_option('')
                 cases.append({'name': entry + '_direction_depth_and_reversible_filter_preserve_positions', 'ok': True})
                 # Move each outer shape: hit handling, shared springs, release and idle stop remain real.
-                for kind in expected:
+                for kind in fixture_kinds:
                     page.locator('.interactive-svg').scroll_into_view_if_needed()
                     key = f'twitter:{kind}_candidate'
                     held = positions(page)[key]

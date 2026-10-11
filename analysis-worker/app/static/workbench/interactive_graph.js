@@ -1,5 +1,5 @@
 import { el, button, sourceLink, setContent } from './ui.js';
-import { relationshipNames, accountState, accountStateName, accountType, accountTypeName, accountTypeInfo, accountTypeBasisName, graphTierNames, graphStructure, graphEmphasis, networkEdgeKey } from './network_model.js';
+import { relationshipNames, accountState, accountStateName, accountType, accountTypeName, accountTypeCounts, accountTypeInfo, accountTypeBasisName, graphTierNames, graphStructure, graphEmphasis, networkEdgeKey } from './network_model.js';
 import { createGraphLayout, stepGraphLayout, settleGraphLayout, graphLabelPlacements, createGraphMotion, advanceGraphMotion, graphMotionStepLimit, graphConfirmationDisplacement, GRAPH_STABLE_MOVEMENT } from './graph_layout.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -13,8 +13,7 @@ export function graphNodeContour(type, radius) {
     const half = radius / Math.SQRT2;
     return { tag: 'rect', attrs: { x: -half, y: -half, width: half * 2, height: half * 2, rx: Math.min(2, radius * .18) } };
   }
-  if (type === 'individual') return { tag: 'circle', attrs: { r: radius } };
-  return { tag: 'path', attrs: { d: `M0 ${-radius}L${radius} 0L0 ${radius}L${-radius} 0Z` } };
+  return { tag: 'circle', attrs: { r: radius } };
 }
 function contour(type, radius, className) {
   const { tag, attrs } = graphNodeContour(type, radius);
@@ -90,6 +89,7 @@ export function interactiveGraph(data, { onNode = () => {}, onEdge = () => {}, o
   const summary = el('div', { class: 'graph-node-summary', role: 'status' });
   const pathResult = el('section', { class: 'graph-path-result', 'aria-label': '路径与公开证据' });
   const relevance = data.relevance_scope || {};
+  const typeCounts = accountTypeCounts(data.nodes);
   const showGeneral = typeof onShowGeneral === 'function' && el('label', { class: 'checkbox graph-show-general' }, el('input', { type: 'checkbox', checked: relevance.show_general === true,
     onChange: event => { viewportState.preservePositions = true; onShowGeneral(event.target.checked); } }), el('span', {}, '显示通用账号'));
   const relevanceNote = typeof onShowGeneral === 'function' && el('p', { class: 'field-hint graph-relevance-note', role: 'status' },
@@ -97,7 +97,7 @@ export function interactiveGraph(data, { onNode = () => {}, onEdge = () => {}, o
   const explorationTools = el('div', { class: 'graph-exploration' }, el('div', { class: 'graph-explore-controls' }, originControl, directionControl, hopsControl, tierControl, endControl),
     el('div', { class: 'actions' }, selectedOrigin, investigate, showGeneral), relevanceNote,
     el('p', { class: 'field-hint graph-structure-note' }, '“我”指关系起点账号。1–3 跳强调公开关系路径，其他节点仍保留并淡化。重点/桥接/外围仅描述当前显示的关系结构，外围仍可追查；不足以判断组织隶属或实际影响力。'),
-    el('div', { class: 'graph-type-legend' }, typeLegend('organization', '组织 · 圆角方形'), typeLegend('individual', '个人 · 圆形'), typeLegend('unknown', '未判定 · 菱形'), el('span', {}, '轮廓与颜色表示账号类型；✓ 表示已核验，核验状态另见详情。')), summary, pathResult);
+    el('div', { class: 'graph-type-legend' }, typeLegend('organization', `组织 ${typeCounts.organization} · 绿色方块`), typeLegend('individual', `个人 ${typeCounts.individual} · 棕色圆点`), el('span', {}, '轮廓与颜色表示组织/个人粗分；✓ 表示已核验，核验状态另见详情。')), summary, pathResult);
   root.append(toolbar, explorationTools, svg, el('p', { class: 'field-hint' }, '拖动拉动相连节点并推开邻近节点 · 松手后整理至稳定 · 双击固定/释放 · 背景平移 · 滚轮缩放。悬停突出实际邻居，点账号或连线查看依据；距离不表示关联强弱。'));
   function refreshExploration() {
     emphasis = graphEmphasis(data, { ...exploration, structure });

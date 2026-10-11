@@ -7,8 +7,7 @@
 .interactive-svg .network-node .network-node-halo { fill: none; stroke: transparent; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .interactive-svg .type-organization, .graph-type-legend .type-organization { --graph-type-colour: #496d5d; }
 .interactive-svg .type-individual, .graph-type-legend .type-individual { --graph-type-colour: #9b6634; }
-.interactive-svg .type-unknown, .graph-type-legend .type-unknown { --graph-type-colour: #6c7686; }
-.interactive-svg .network-node .network-node-dot { fill: var(--graph-type-colour, #6c7686); stroke: #f6f5ef; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.interactive-svg .network-node .network-node-dot { fill: var(--graph-type-colour, #9b6634); stroke: #f6f5ef; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .interactive-svg .network-node.selected .network-node-halo, .interactive-svg .network-node.highlighted .network-node-halo, .interactive-svg .network-node:focus .network-node-halo { stroke: #b14332; }
 .interactive-svg .network-node.pinned .network-node-halo { stroke: #767d72; stroke-dasharray: 2 3; }
 .interactive-svg .network-node.dimmed { opacity: .3; }

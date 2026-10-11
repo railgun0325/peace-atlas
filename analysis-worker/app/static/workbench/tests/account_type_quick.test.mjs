@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accountTypeSummary, accountTypeControls } from '../account_type.js';
 import { accountTypeBasisName, accountTypeInfo } from '../network_model.js';
-import { reviewProgress } from '../review.js';
+import { reviewProgress, reviewOutcomeCounts } from '../review.js';
 import { jobTitle } from '../social.js';
+import { accountPage } from '../library.js';
 
 function installDOM(t) {
   class InertNode {
@@ -46,11 +47,11 @@ test('each quick type action makes one manual locked correction and refreshes sa
   const account = { id: 'fixture', account_type: 'unknown' };
   const controls = accountTypeControls({ signal: new AbortController().signal }, account, value => refreshed.push(value));
   const actions = controls.querySelectorAll('button');
-  assert.deepEqual(actions.map(row => row.textContent), ['设为组织', '设为个人', '设为未判定']);
+  assert.deepEqual(actions.map(row => row.textContent), ['设为组织', '设为个人']);
   for (const control of actions) await control.events.click();
-  assert.deepEqual(requests.map(row => row.body.type), ['organization', 'individual', 'unknown']);
+  assert.deepEqual(requests.map(row => row.body.type), ['organization', 'individual']);
   assert.ok(requests.every(row => row.url === '/api/v2/accounts/fixture/identity' && row.method === 'PATCH' && row.body.manual_locked === true && row.body.evidence_urls.length === 0));
-  assert.equal(refreshed.length, 3);
+  assert.equal(refreshed.length, 2);
   assert.ok(refreshed.every(row => row.status === 'verified'));
   assert.ok(actions.every(row => row.disabled === false));
 });
@@ -66,6 +67,40 @@ test('explicit unlock only changes the lock endpoint and preserves type provenan
   const unlock = controls.querySelectorAll('button').find(row => row.textContent === '解除人工锁定');
   assert.ok(unlock); await unlock.events.click();
   assert.deepEqual(requests, [{ url: '/api/v2/accounts/fixture/type-lock', body: { manual_locked: false } }]);
+});
+
+test('legacy unknown appears as personal while its provenance, manual lock and separate identity remain intact', t => {
+  installDOM(t);
+  const account = { id: 'legacy', account_type: 'unknown', status: 'candidate',
+    account_type_details: { basis: 'insufficient_source', manual_locked: true, note: '旧记录依据不足' } };
+  const summary = accountTypeSummary(account);
+  assert.match(summary.textContent, /^个人.*依据不足.*人工锁定.*旧记录依据不足/);
+  assert.doesNotMatch(summary.textContent, /未判定|已核验/);
+  const actions = accountTypeControls({}, account, () => {}).querySelectorAll('button');
+  assert.deepEqual(actions.map(row => row.textContent), ['设为组织', '设为个人', '解除人工锁定']);
+  assert.equal(actions[0].getAttribute('aria-pressed'), 'false');
+  assert.equal(actions[1].getAttribute('aria-pressed'), 'true');
+  assert.equal(account.account_type, 'unknown');
+  assert.equal(account.status, 'candidate');
+});
+
+test('account list personal filtering combines legacy unknown and missing types and still respects identity status', () => {
+  const accounts = [{ id: 'org', account_type: 'organization', status: 'verified' },
+    { id: 'personal', account_type: 'individual', status: 'candidate' },
+    { id: 'unknown', account_type: 'unknown', status: 'verified' }, { id: 'missing', status: 'verified' }];
+  assert.deepEqual(accountPage(accounts, { accountType: 'individual' }).items.map(row => row.id), ['personal', 'unknown', 'missing']);
+  assert.deepEqual(accountPage(accounts, { accountType: 'individual', status: 'verified' }).items.map(row => row.id), ['unknown', 'missing']);
+  assert.equal(accountPage(accounts, { accountType: 'organization' }).total, 1);
+});
+
+test('review result counters fold legacy unknown into one personal category and preserve non-account decisions', () => {
+  const outcomes = { organization: 2, individual: 3, unknown: 4, confirmed: 5, inconclusive: 6 };
+  assert.deepEqual(reviewOutcomeCounts(outcomes, { accountTypes: true }), { organization: 2, individual: 7, confirmed: 5, inconclusive: 6 });
+  assert.deepEqual(reviewOutcomeCounts(outcomes), outcomes);
+  assert.deepEqual(reviewOutcomeCounts({ organization: 2, individual: 3, unknown: 0 }, { accountTypes: true }), { organization: 2, individual: 3 });
+  assert.deepEqual(reviewOutcomeCounts(outcomes, { results: [{ kind: 'accounts', outcome: 'unknown' }, { kind: 'claims', outcome: 'unknown' }] }),
+    { organization: 2, individual: 4, unknown: 3, confirmed: 5, inconclusive: 6 });
+  assert.deepEqual(outcomes, { organization: 2, individual: 3, unknown: 4, confirmed: 5, inconclusive: 6 });
 });
 
 test('failed correction shows readable error and does not refresh unsaved state', async t => {

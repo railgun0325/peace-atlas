@@ -27,11 +27,12 @@ def main():
     instagram = {"account_key": "instagram:public_ig", "account_id": "ig-id", "platform": "instagram", "handle": "public_ig", "name": unsafe, "depth": 2, "status": "skipped", "parent_key": child["account_key"], "discovery_reason": unsafe, "account_status": "candidate", "evidence_urls": ["javascript:alert(1)"], "url": "data:text/html,bad"}
     root["account_status"] = "verified"
     child["account_status"] = "excluded"
+    child["account_type"] = "unknown"  # Legacy unknown and missing types both render as individual.
     graph = {"run": {"id": "run-public", "job_id": "research-job", "status": "partial", "params": {"keyword": "反戦, 九条", "research_goal": "追踪公开账号之间的活动联系", "start_date": "2026-09-01", "end_date": "2026-10-06", "depth": 2}, "analysis": {"ai": {"requested": True, "used": False}, "decisions": [{"action": "展开相关作者", "reason": "正文与当前主题相关", "method": "rules", "outcome": "visited"}, {"action": "停止无关分支", "reason": unsafe, "method": "rules", "outcome": "skipped"}]}, "diagnostics": [{"message": "部分来源无法访问"}], "summary": {"accounts": 3}}, "nodes": [root, child, instagram], "edges": [{"id": "edge-follow", "source_key": root["account_key"], "target_key": child["account_key"], "relationship": "follows", "evidence_urls": ["https://x.com/public_root/following"]}, {"id": "edge-mention", "source_key": child["account_key"], "target_key": instagram["account_key"], "relationship": "mentions", "evidence_urls": ["https://x.com/public_child/status/456"]}], "items": [{"id": "post-1", "account_id": "root-id", "title": "原始公开材料", "content": "这是一条反战活动的公开原帖。", "url": "https://x.com/public_root/status/123", "published_at": "2026-09-30T05:00:00Z"}, {"id": "post-2", "account_id": "ig-id", "title": unsafe, "content": unsafe, "url": "javascript:alert(1)", "published_at": None}], "claims": [{"id": "claim-explicit", "subject_key": root["account_key"], "object_label": "公开团体", "statement": "主页中的自述提供组织关系线索，尚需复核。", "basis": "reported", "status": "candidate", "evidence_urls": []}, {"id": "claim-inferred", "subject_key": child["account_key"], "object_label": unsafe, "statement": unsafe, "basis": "inferred", "status": "candidate", "evidence_urls": []}], "coverage": "仅包含本次实际访问的公开资料。"}
     graph["run"]["params"].update(max_accounts=12, max_edges=60, max_records=50, time_budget_seconds=1800, max_scrolls=10)
     graph["run"]["frontier"] = [{"account_key": "twitter:public_pending"}]
     graph["run"]["summary"].update(deferred_frontier_version=1, pending_work_version=1, deferred_count=1)
-    state = {"reads": 0, "reviews": [], "review_error": False, "resume_error": True, "resumes": 0, "cancels": 0}
+    state = {"reads": 0, "reviews": [], "review_error": False, "resume_error": True, "estimates": 0, "resumes": 0, "cancels": 0}
     errors = []
     html = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/typography.css"><link rel="stylesheet" href="/assets/features.css"></head><body><main id="main"></main><div id="notifications"></div>
       <script type="module">import {renderNetwork} from '/assets/network.js';window.__polls=[];window.__pollDelays=[];window.__navigation=[];
@@ -60,8 +61,13 @@ def main():
             data = {"saved": True}
         elif path == "/api/v2/capabilities":
             data = {"research": {"available": True, "max_accounts": 40, "max_edges": 200, "max_records": 10000, "time_budget_seconds": 86400}}
-        elif path == "/api/v2/research/run-public/continue" and method == "POST":
+        elif path == "/api/v2/research/run-public/continue-estimate" and method == "POST":
             assert set(request.request.post_data_json) == {"max_accounts", "max_edges", "max_records", "time_budget_seconds"}
+            state["estimates"] += 1
+            data = {"lower_seconds": 90, "upper_seconds": 180, "basis": "合成续查预估；尚未执行采集。", "preview_token": "fixture-public-preview-token"}
+        elif path == "/api/v2/research/run-public/continue" and method == "POST":
+            assert set(request.request.post_data_json) == {"max_accounts", "max_edges", "max_records", "time_budget_seconds", "preview_token"}
+            assert request.request.post_data_json["preview_token"] == "fixture-public-preview-token"
             state["resumes"] += 1
             if state["resume_error"]:
                 return request.fulfill(status=409, content_type="application/json", body=json.dumps({"error": {"message": "当前研究暂时无法继续"}}))
@@ -109,9 +115,10 @@ def main():
         if artifacts:
             (artifacts / "graph-account-statuses.json").write_text(json.dumps({"nodeLabels": page.locator(".network-node").evaluate_all("nodes => nodes.map(node => ({key: node.dataset.key, label: node.getAttribute('aria-label')}))"), "pageErrors": errors}, ensure_ascii=False, indent=2), "utf-8")
             page.screenshot(path=str(artifacts / "graph-account-statuses.png"), full_page=True)
-        expect(page.locator('[data-key="twitter:public_root"]')).to_have_attribute("aria-label", "公开研究账号，未判定，已核验，外围结构。回车查看，方向键移动并固定，双击固定或释放。")
-        expect(page.locator('[data-key="twitter:public_child"]')).to_have_attribute("aria-label", "公开关联账号，未判定，候选账号，桥接结构。回车查看，方向键移动并固定，双击固定或释放。")
-        expect(page.locator('[data-key="instagram:public_ig"]')).to_have_attribute("aria-label", unsafe + "，未判定，候选账号，外围结构。回车查看，方向键移动并固定，双击固定或释放。")
+        expect(page.locator('[data-key="twitter:public_root"]')).to_have_attribute("aria-label", "公开研究账号，个人，已核验，外围结构。回车查看，方向键移动并固定，双击固定或释放。")
+        expect(page.locator('[data-key="twitter:public_child"]')).to_have_attribute("aria-label", "公开关联账号，个人，候选账号，桥接结构。回车查看，方向键移动并固定，双击固定或释放。")
+        expect(page.locator('[data-key="instagram:public_ig"]')).to_have_attribute("aria-label", unsafe + "，个人，候选账号，外围结构。回车查看，方向键移动并固定，双击固定或释放。")
+        assert page.locator('.network-node').evaluate_all("nodes => nodes.every(node => node.dataset.accountType === 'individual' && node.querySelector('.network-node-dot').tagName === 'circle')")
         page.locator(".network-edge").first.focus()
         page.keyboard.press("Enter")
         expect(page.get_by_role("complementary", name="账号与证据详情")).to_contain_text("关注和共同材料本身不能确认组织隶属")
@@ -158,8 +165,9 @@ def main():
         state["review_error"] = False
         modal.get_by_role("button", name="保存人工确认", exact=True).click()
         expect(modal).to_have_count(0)
-        expect(page.locator(".research-claim").first).to_contain_text("人工确认")
-        expect(page.get_by_role("link", name="人工复核证据", exact=True)).to_have_attribute("href", "https://example.org/public-affiliation")
+        expect(page.locator(".research-claim").first).to_have_class("research-claim claim-confirmed")
+        expect(page.locator(".research-claim").first.locator(".claim-status")).to_have_text("已确认")
+        expect(page.get_by_role("link", name="审核依据", exact=True)).to_have_attribute("href", "https://example.org/public-affiliation")
         page.get_by_role("button", name="排除此判断", exact=True).last.click()
         modal.locator("[name=note]").fill("没有足够的公开证据支持这个归属判断。")
         state["review_error"] = True
@@ -177,14 +185,17 @@ def main():
         resume.click()
         continuation = page.get_by_role("dialog", name="继续研究", exact=True)
         expect(continuation.locator('[name="max_accounts"]')).to_have_attribute("max", "40")
-        continuation.get_by_role("button", name="开始继续研究", exact=True).click()
+        continuation.get_by_role("button", name="预估续查用时", exact=True).click()
+        expect(continuation.locator(".research-estimate")).to_contain_text("合成续查预估；尚未执行采集。")
+        assert state["estimates"] == 1 and state["resumes"] == 0, "An estimate must not create continuation work"
+        continuation.get_by_role("button", name="确认预计用时并继续", exact=True).click()
         expect(continuation.get_by_role("alert")).to_contain_text("当前研究暂时无法继续")
-        expect(continuation.get_by_role("button", name="开始继续研究", exact=True)).to_be_enabled()
+        expect(continuation.get_by_role("button", name="确认预计用时并继续", exact=True)).to_be_enabled()
         state["resume_error"] = False
-        continuation.get_by_role("button", name="开始继续研究", exact=True).click()
+        continuation.get_by_role("button", name="确认预计用时并继续", exact=True).click()
         page.wait_for_function("window.__navigation.length === 1")
         assert page.evaluate("window.__navigation.at(-1)") == ["jobs", {"selected": "resumed-job"}]
-        assert state["resumes"] == 2
+        assert state["resumes"] == 2 and state["estimates"] == 1
         graph["run"]["status"] = "running"
         page.reload()
         expect(page.get_by_role("button", name="停止研究", exact=True)).to_be_visible()
@@ -207,7 +218,7 @@ def main():
             page.get_by_role("button", name="继续研究", exact=True).click()
             continuation = page.get_by_role("dialog", name="继续研究", exact=True)
             expect(continuation.locator('[name="max_accounts"]')).to_have_attribute("max", "40")
-            expect(continuation.get_by_role("button", name="开始继续研究", exact=True)).to_be_disabled()
+            expect(continuation.get_by_role("button", name="预估续查用时", exact=True)).to_be_disabled()
             continuation.get_by_role("button", name="取消", exact=True).click()
             expect(page.get_by_role("dialog")).to_have_count(0)
             assert state["resumes"] == before_budget_resume

@@ -440,7 +440,8 @@ def register_agent_api(app):
             operations[name] = {"scope": spec["scope"], "mutates": spec["scope"] != "read",
                                 "arguments": shape}
             if name == 'classify.start':
-                operations[name].update(description='快速批量账号类型粗分，可人工更改；仅名称、用户名和已保存公开简介。',
+                operations[name].update(description='快速批量组织/个人粗分，可人工更改；仅名称、用户名和已保存公开简介，未见明确组织发布线索时归个人。',
+                    classification_types=['organization', 'individual'],
                     may_read_public_network=False, identity_verification=False, manual_locked_skipped=True)
             if name in {"job.cancel", "job.retry"}:
                 operations[name]["scope_by_job"] = {"evidence_review": "review", "account_classification": "review", "other_business": "run"}

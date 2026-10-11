@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-10-11T17:41:50.970990+00:00",
+  "captured_at": "2026-10-11T18:55:43.493331+00:00",
   "freeze_format_version": 2,
   "targets": {
     "windows-x64": 3142,
@@ -96,7 +96,7 @@
     },
     "backend/app/workbench/agent_api.py": {
       "source": "analysis-worker/app/workbench/agent_api.py",
-      "sha256": "ee90f5257b20cd68f8dcc768ea14218f0638a3090469817d5263dbce0f88ffa6"
+      "sha256": "179b3698be80865cbc69803e9116e36d7c1e0f01850fbffd840c0c49f9fae239"
     },
     "backend/app/workbench/ai_capacity.py": {
       "source": "analysis-worker/app/workbench/ai_capacity.py",
@@ -120,7 +120,7 @@
     },
     "backend/app/workbench/fast_account_classification.py": {
       "source": "analysis-worker/app/workbench/fast_account_classification.py",
-      "sha256": "63e375c87795998e3b833c533556916056c840daf2cc8293ad30d46e57583fea"
+      "sha256": "ba9ee5d5e5d8c88fe7bb3ad999d489770ab125ddd9e122c4477dfbc26db62745"
     },
     "backend/app/workbench/google_news_resolver.py": {
       "source": "analysis-worker/app/workbench/google_news_resolver.py",
@@ -324,7 +324,7 @@
     },
     "backend/app/static/workbench/account_type.js": {
       "source": "analysis-worker/app/static/workbench/account_type.js",
-      "sha256": "2a22e5713c6f9d90193c15b55e36ebcb80942c522997e677cd441569172c0611"
+      "sha256": "03c622afd907209ba2855f081ebfade5fdf068715df9d99571005fa600e2402f"
     },
     "backend/app/static/workbench/actions.js": {
       "source": "analysis-worker/app/static/workbench/actions.js",
@@ -360,7 +360,7 @@
     },
     "backend/app/static/workbench/features.css": {
       "source": "analysis-worker/app/static/workbench/features.css",
-      "sha256": "b99b89c4595d3a33a9abfe047644743c7cdc31c6e4d4361752a52e06a8db8f58"
+      "sha256": "236c269df0150a4126c3c776b5666695268dec572d98c70dc189363717527069"
     },
     "backend/app/static/workbench/firefox.js": {
       "source": "analysis-worker/app/static/workbench/firefox.js",
@@ -396,7 +396,7 @@
     },
     "backend/app/static/workbench/interactive_graph.js": {
       "source": "analysis-worker/app/static/workbench/interactive_graph.js",
-      "sha256": "017ad7a7a3681944f7cc0677ca66217a476b2976f18d18a299a9c8408039d2b0"
+      "sha256": "da26ed8c5863584364f09274de02a877dd4b7e78d035aae62bb6d31a7d723cf8"
     },
     "backend/app/static/workbench/japan_prefectures.json": {
       "source": "analysis-worker/app/static/workbench/japan_prefectures.json",
@@ -408,15 +408,15 @@
     },
     "backend/app/static/workbench/library.js": {
       "source": "analysis-worker/app/static/workbench/library.js",
-      "sha256": "4958a13b8259b6266d445cd23aa140740ab45809bc328654ae57a1b45b6b3adf"
+      "sha256": "64080fa6d6f94cb9c9c00274327afa4f6e899b61516d500f70820395b12d7607"
     },
     "backend/app/static/workbench/network.js": {
       "source": "analysis-worker/app/static/workbench/network.js",
-      "sha256": "17a629e407b6b1235ccec4ec11d14963afa3c32b2ff0183a7ae22543629d004b"
+      "sha256": "5565c38809ab4e3a3370b112021c05d2a5152240109e7d91cc2df5af095b673c"
     },
     "backend/app/static/workbench/network_model.js": {
       "source": "analysis-worker/app/static/workbench/network_model.js",
-      "sha256": "11c8f7c1f1bc57ff76cfe898a565246a154d311a93ae1381ae797462140867dc"
+      "sha256": "a9a1bd5ca951b7064c17e714d2bf2be2c6050f37763d322c9ddeff66c3205abb"
     },
     "backend/app/static/workbench/overview.js": {
       "source": "analysis-worker/app/static/workbench/overview.js",
@@ -424,7 +424,7 @@
     },
     "backend/app/static/workbench/registry.js": {
       "source": "analysis-worker/app/static/workbench/registry.js",
-      "sha256": "67aadc1a2b088527d26e07e38aa05a8e84433d541ca4aad6bbca55135d6fc78b"
+      "sha256": "043ccb4eef03fbd416623de35b176c5cc1d620f9ab05ff85801544bc9e609e2b"
     },
     "backend/app/static/workbench/report_progress.js": {
       "source": "analysis-worker/app/static/workbench/report_progress.js",
@@ -444,7 +444,7 @@
     },
     "backend/app/static/workbench/review.js": {
       "source": "analysis-worker/app/static/workbench/review.js",
-      "sha256": "eff54d297ff28e88fb053c4974bfd78bd9df9eb939de2643eb03171de3aefefe"
+      "sha256": "94dad8c6768504d93677968593e401872cd55786057ff9ced4ee88b5f97045c2"
     },
     "backend/app/static/workbench/session_bridge.js": {
       "source": "analysis-worker/app/static/workbench/session_bridge.js",
@@ -476,15 +476,15 @@
     },
     "backend/app/workbench/agent_assets/INSTALL.md": {
       "source": "analysis-worker/app/workbench/agent_assets/INSTALL.md",
-      "sha256": "8a34a1c0a6cfed5c350b833c274c6b567218e3a4911f3f4eded0a64adcb0ab73"
+      "sha256": "109f1f3b18be866f3627c6cf0b0870fcdcf6809066a1c613d6479a392198f2f2"
     },
     "backend/app/workbench/agent_assets/AUTOMATIC_REVIEW.md": {
       "source": "analysis-worker/app/workbench/agent_assets/AUTOMATIC_REVIEW.md",
-      "sha256": "90334f43832044dbdc39a72ff58c58aecbc5503763c43771fd599d845f651ee1"
+      "sha256": "0f9258f80bf6349a28f517909088727a83f69295758574673f3d4ad20cc1377c"
     },
     "backend/app/workbench/agent_assets/peace-atlas/SKILL.md": {
       "source": "analysis-worker/app/workbench/agent_assets/peace-atlas/SKILL.md",
-      "sha256": "717f28ef810692b0ebcd8b6decce9cff3df63364b7740986a9f6b505790d2b01"
+      "sha256": "bd0114513ba6eeb9635aae8305831c4baae931845d17df23da87e3eb4750cf7f"
     },
     "backend/app/workbench/agent_assets/peace-atlas/agents/openai.yaml": {
       "source": "analysis-worker/app/workbench/agent_assets/peace-atlas/agents/openai.yaml",
@@ -492,7 +492,7 @@
     },
     "backend/app/workbench/agent_assets/peace-atlas/references/api.md": {
       "source": "analysis-worker/app/workbench/agent_assets/peace-atlas/references/api.md",
-      "sha256": "4a284f21a4214f0da1aa106b60457ddbea63618a18408fbe057b7816c4a802c2"
+      "sha256": "6f915d4ce3e4c2c062cab208929dbb7a25df703d73ab9250e9a3fadfa17c7903"
     },
     "backend/app/workbench/agent_assets/peace-atlas/scripts/peace_atlas.py": {
       "source": "analysis-worker/app/workbench/agent_assets/peace-atlas/scripts/peace_atlas.py",
@@ -18927,7 +18927,7 @@
   "builder_sha256": "300ff0d042abfa58a7c244e73255320aef19568ec0aa75f1d487d61310336191",
   "test_files": {
     "analysis-worker/app/static/workbench/tests/account_relations_browser_smoke.py": "05091df98a8097b6dbf7dc43eab3916e939c837a379229a345432124df3898b2",
-    "analysis-worker/app/static/workbench/tests/account_type_quick.test.mjs": "e12393f7b816558ed882fe529d40b9b63cdb56efd550a51e55a6d4db04102042",
+    "analysis-worker/app/static/workbench/tests/account_type_quick.test.mjs": "b6c6fdc6bb28e84b8aaa662ef7e2681f07abdf749ff6b6a183ed54b0d596e2d8",
     "analysis-worker/app/static/workbench/tests/app_flow_browser_smoke.py": "0b154e85564cb49c356464b35cbfa9eb3d99ef2d0076aa2b7bfaea3cd4545c37",
     "analysis-worker/app/static/workbench/tests/batch_browser_smoke.py": "0539d78665dcfd59c31d93b23c82c33299467f6e439acc910d4f22c93dde0667",
     "analysis-worker/app/static/workbench/tests/budget_limits.test.mjs": "61cd5ea20a65e6a694b87943bdd7cfe683048280aecc57a2cef70ef462b47a50",
@@ -18942,12 +18942,12 @@
     "analysis-worker/app/static/workbench/tests/hardening_browser_smoke.py": "a8f70e9a59e0c7b3b50c3a795600af669b1cd99b45374487f958390b07ab3dfd",
     "analysis-worker/app/static/workbench/tests/harness_browser_smoke.py": "7cbd4105598f926f12587db712bfcd3d6f3069825f425e5680e565f4848d9a9c",
     "analysis-worker/app/static/workbench/tests/network_analysis_browser_smoke.py": "4e111f29ae0c33324bbdd741ca79bf76f407e71ca9ce1a86e60cd3ad543de5b0",
-    "analysis-worker/app/static/workbench/tests/network_browser_smoke.py": "bb7accb957dad852512de4ec916e1471ad8d163b7f8017d251dd2e5b64c3b547",
-    "analysis-worker/app/static/workbench/tests/network_depth.test.mjs": "3b5c6dda4bc06507bafb17d10750d2351de19290ae572c05fb3e3942fe11e6ce",
+    "analysis-worker/app/static/workbench/tests/network_browser_smoke.py": "0aa7519905f3369f3a101c64a800cf37a957e7f44230e17ddd06df667f66cc63",
+    "analysis-worker/app/static/workbench/tests/network_depth.test.mjs": "f0ac6a63c91df02bf41fde6f445c7e1226be8566ebb9b5c7490452833de894fc",
     "analysis-worker/app/static/workbench/tests/network_depth_browser_smoke.py": "769b3fe4faaa4ef21abbb1a0713739dd806523087df1120e42409ab889262664",
     "analysis-worker/app/static/workbench/tests/network_model.test.mjs": "ca2772e61e9dccf5a285a2c7e47d10e260cce106287c499c7f244cb45df749a8",
-    "analysis-worker/app/static/workbench/tests/node_contours.test.mjs": "819275306f90b33752d305fe0e742da50f10e144672cc624b59b0edba85e09b0",
-    "analysis-worker/app/static/workbench/tests/node_contours_browser_smoke.py": "4f6178e5b1009ec88bf15d8c17663d9f462272aae84b53abd485500a1246f6b7",
+    "analysis-worker/app/static/workbench/tests/node_contours.test.mjs": "2c46b0d908eca80ce87bad86bb8ba9dd4191942e0267820fa9a674a10b1d00d6",
+    "analysis-worker/app/static/workbench/tests/node_contours_browser_smoke.py": "e11e7db68d82fe8e902fc0f714e9c7defa9b42d6b2117029e1b409e70da3c14e",
     "analysis-worker/app/static/workbench/tests/product_interaction_browser_smoke.py": "6bb63c6ee7053c02678f5f0383183a952c1231e969781bb9176def00bceae541",
     "analysis-worker/app/static/workbench/tests/report_progress.test.mjs": "361f9361481603a8f21852dbab67934325b7d2bbec824969d5c6e05a2a9fe6e5",
     "analysis-worker/app/static/workbench/tests/report_retry.test.mjs": "ba057dc20344acddd1a53a049b5f40f12902db748ec46fe136839efb684db265",
@@ -18955,7 +18955,7 @@
     "analysis-worker/app/static/workbench/tests/research_resume_model.test.mjs": "a21ca8426617b1dd3b8f495d310ac3b2dfe58da579587387eea617ccffa6adf3",
     "analysis-worker/app/static/workbench/tests/restore_browser_smoke.py": "325f8a4358ab4d2c32b1bd2aa18409c0d6c78e3c2f583982752c98274e338d89",
     "analysis-worker/app/static/workbench/tests/review_progress.test.mjs": "42a65d00c669b0d70bcbcf21b5660a34cde13f00ce4f43adb18904e570bb5385",
-    "analysis-worker/app/static/workbench/tests/review_source_cache.test.mjs": "e07a4657ab3ca8fc94bd16c4f5698de8e5cc7bf4b72485c200fd6e1bd2d07b06",
+    "analysis-worker/app/static/workbench/tests/review_source_cache.test.mjs": "963afe6d32916e34d6f2fadd7644616dfda2f63a761e50211389ba640d5616d0",
     "analysis-worker/app/static/workbench/tests/review_source_cache_browser_smoke.py": "8424d83a73bb6f4561eb8bc9ce6c0b5468a90d6dca1ae6dc757f89e0b2f933d3",
     "analysis-worker/app/static/workbench/tests/social_browser_smoke.py": "7953573935848bbda304b6970e508a6eec5d4693eca4170711519251c65abb45",
     "analysis-worker/app/static/workbench/tests/workbench.test.mjs": "e2bb0b80fe8a53fc98b7eb74203af5577a45324f12b93b45a1ac7b769b5b790c",
@@ -18994,7 +18994,7 @@
     "analysis-worker/tests/test_workbench_deferred_chunk_checkpoint.py": "80f893788f9c2fb7bb32f35b5eaec28ead75cbdd6cf78e28d59f18a43832356b",
     "analysis-worker/tests/test_workbench_direction_persistence.py": "fc036c437f6d33df87a30a407ff5e2038154f1e403c98a668c4d8d9711b82f16",
     "analysis-worker/tests/test_workbench_external_browser.py": "ccc06f0cc67c8fed7cc46fa18d40e62144f45fa3ab9e74daad16169d1a63ad0b",
-    "analysis-worker/tests/test_workbench_fast_account_classification.py": "9113ac33b8c4495db374f747184e6147e15185f047ebec4f5ce885ceb91c2da6",
+    "analysis-worker/tests/test_workbench_fast_account_classification.py": "30961a78f8a0dc0e965c2777f28f140dc08e46f1daba645f82a4fca515ebfbd5",
     "analysis-worker/tests/test_workbench_firefox_import.py": "9b62f9db5e554e0f40d0e5a86b709e889da4a26d7bd16bea5a09e085ffa052df",
     "analysis-worker/tests/test_workbench_frontier_pipeline.py": "dc54efad5ab2a86b095f6f4a8943a9b5c64d109d9e7dbf9d7cf23a8ff38c9a44",
     "analysis-worker/tests/test_workbench_frontier_read_performance.py": "66dec3962cbf0ed52bfa509cf138684d6489d79d84698dc7adac86dcc1bea77c",

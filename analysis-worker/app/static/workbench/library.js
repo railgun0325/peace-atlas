@@ -1,6 +1,7 @@
 import { api, apiPage, pageNumber, pathId } from './api.js';
 import { openAutoReview, openFastClassification } from './review.js';
 import { accountTypeSummary, accountTypeControls } from './account_type.js';
+import { accountType, accountTypeNames } from './network_model.js';
 import { el, button, heading, field, badge, sourceLink, dateText, empty, loading, errorBox, dialog, pagination, number, setContent, notify } from './ui.js';
 import { openImport, openAccountEdit, openVerification } from './actions.js';
 import { evidenceMetadata, openAccountRelations, isSocial } from './social.js';
@@ -83,9 +84,9 @@ export async function renderLibrary(ctx) {
   return content;
 }
 
-export function accountPage(accounts, { query = '', status = '', page = 1 } = {}) {
+export function accountPage(accounts, { query = '', status = '', accountType: type = '', page = 1 } = {}) {
   const keyword = String(query).trim().toLowerCase();
-  const rows = accounts.filter(account => (!status || account.status === status) && (!keyword || [account.name, account.handle, account.organization, account.platform].some(value => String(value || '').toLowerCase().includes(keyword))));
+  const rows = accounts.filter(account => (!status || account.status === status) && (!type || accountType(account) === type) && (!keyword || [account.name, account.handle, account.organization, account.platform].some(value => String(value || '').toLowerCase().includes(keyword))));
   const page_size = 30;
   const last = Math.max(1, Math.ceil(rows.length / page_size));
   const current = Math.min(last, Math.max(1, Math.trunc(Number(page)) || 1));
@@ -95,25 +96,27 @@ export function accountPage(accounts, { query = '', status = '', page = 1 } = {}
 export async function renderAccounts(ctx) {
   const data = await api('accounts', { signal: ctx.signal });
   const accounts = data.items || [];
-  const content = el('div', {}, heading('06', '组织与账号', 'SOURCE REGISTRY', '类型粗分可手动更改；公开身份核验单独进行。', [button('快速判定账号类型', () => openFastClassification(ctx), 'secondary'), button('查看可拖拽关系图', () => ctx.navigate('connections'), 'secondary', 'network'), button('自动核验候选账号', () => openPublicVerification(ctx), 'secondary'), button('新增账号', () => openAccountEdit(ctx), '', 'plus')]));
+  const content = el('div', {}, heading('06', '组织与账号', 'SOURCE REGISTRY', '组织/个人粗分（可手动更改）；公开身份核验单独进行。', [button('快速判定账号类型', () => openFastClassification(ctx), 'secondary'), button('查看可拖拽关系图', () => ctx.navigate('connections'), 'secondary', 'network'), button('自动核验候选账号', () => openPublicVerification(ctx), 'secondary'), button('新增账号', () => openAccountEdit(ctx), '', 'plus')]));
   const counters = el('div', { class: 'account-stats' }, ['candidate', 'verified', 'excluded'].map(status => el('div', {}, el('strong', { class: 'mono' }, number(accounts.filter(a => a.status === status).length)), badge(status))));
   const list = el('div', { class: 'account-list', tabindex: '-1', 'aria-label': '账号结果' });
   const paging = el('div');
   let page = pageNumber(ctx.params.get('page'));
   const search = field('搜索名称、组织或用户名', { name: 'search', value: ctx.params.get('query') || '', placeholder: '查找研究账号' });
   const status = field('核验状态', { name: 'status', value: ctx.params.get('status') || '', options: [['', '全部状态'], ['candidate', '待核验'], ['verified', '已核验'], ['excluded', '已排除']] });
+  const typeFilter = field('账号类型', { name: 'account_type_filter', value: ctx.params.get('account_type') || '', options: [['', '全部类型'], ...Object.entries(accountTypeNames)] });
   function draw() {
     const keyword = search.querySelector('input').value.trim().toLowerCase();
     const selected = status.querySelector('select').value;
-    const result = accountPage(accounts, { query: keyword, status: selected, page });
+    const selectedType = typeFilter.querySelector('select').value;
+    const result = accountPage(accounts, { query: keyword, status: selected, accountType: selectedType, page });
     page = result.page;
-    ctx.replaceParams?.({ query: search.querySelector('input').value, status: selected, ...(page > 1 ? { page } : {}) });
+    ctx.replaceParams?.({ query: search.querySelector('input').value, status: selected, account_type: selectedType, ...(page > 1 ? { page } : {}) });
     const rows = result.items;
     setContent(paging, pagination(result, next => { page = next; draw(); list.focus({ preventScroll: true }); list.scrollIntoView({ block: 'start', behavior: 'instant' }); }));
     setContent(list, ...(rows.length ? rows.map(account => el('article', { class: 'account-card', 'data-account-id': account.id }, el('div', { class: 'account-card-head' }, el('span', { class: 'platform mono' }, account.platform), badge(account.status)), el('h2', {}, account.name || account.handle), el('p', { class: 'account-handle mono' }, account.handle || ''), accountTypeSummary(account), accountTypeControls(ctx, account, async value => { Object.assign(account, value); draw(); }), account.organization && el('p', { class: 'muted' }, account.organization), sourceLink(account.url, '打开公开账号'), el('div', { class: 'tag-list' }, (account.tags || []).map(tag => el('span', { class: 'tag' }, tag))), account.evidence_url && el('div', { class: 'evidence-line' }, sourceLink(account.evidence_url, '核验依据')), el('div', { class: 'account-card-actions' }, button('关系', () => openAccountRelations(account, ctx), 'secondary small'), isSocial(account.platform) && button('采集', () => ctx.navigate('network', { compose: 'collect', source: account.platform, handle: account.handle }), 'secondary small'), button('编辑', () => openAccountEdit(ctx, account), 'secondary small'), account.status !== 'verified' && button('核验', () => openVerification(ctx, account), 'small'), account.status !== 'excluded' && button('排除', () => openVerification(ctx, account, false), 'text small')))) : [empty(accounts.length ? '没有匹配的账号' : '建立你的来源档案', accounts.length ? '试试其他关键词或核验状态。' : '添加公开账号，记录组织背景与核验依据。账号记录与采集能力分别管理。', [button('新增账号', () => openAccountEdit(ctx), 'secondary', 'plus')])]));
   }
   const filterChanged = () => { page = 1; draw(); };
-  search.querySelector('input').addEventListener('input', filterChanged); status.querySelector('select').addEventListener('change', filterChanged);
-  content.append(counters, el('div', { class: 'filter-panel form-grid' }, search, status), list, paging); draw();
+  search.querySelector('input').addEventListener('input', filterChanged); status.querySelector('select').addEventListener('change', filterChanged); typeFilter.querySelector('select').addEventListener('change', filterChanged);
+  content.append(counters, el('div', { class: 'filter-panel form-grid' }, search, status, typeFilter), list, paging); draw();
   return content;
 }
