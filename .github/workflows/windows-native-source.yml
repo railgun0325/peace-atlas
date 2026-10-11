@@ -1,0 +1,474 @@
+name: Build and verify private Windows recovery source
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character source commit containing the pinned recovery manifest
+        required: true
+        type: string
+      release_tag:
+        description: Existing private draft tag in this repository
+        required: true
+        type: string
+
+# Write permission is used only for accepted candidate uploads to the existing private draft.
+permissions:
+  contents: write
+
+concurrency:
+  group: peace-atlas-windows-native-source-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build-native-source:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      EXPECTED_REPOSITORY: railgun0325/peace-atlas
+      # Root must replace this with the final v2 committed recovery source-manifest digest.
+      EXPECTED_MANIFEST_SHA256: b4ad7ce3a924307f485e9730a7e8d1b13caf26540c97ed9ddf786d189b245adc
+    steps:
+      - name: Fetch the exact same-repository committed source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import hashlib, json, os, pathlib, platform, re, subprocess, sys, tarfile
+
+          def valid_inputs(repository, expected_repository, source_sha, tag):
+              if repository != expected_repository:
+                  raise ValueError('Only the explicitly authorized repository is supported')
+              if not re.fullmatch(r'[a-f0-9]{40}', source_sha):
+                  raise ValueError('source_sha must be a full lowercase commit SHA')
+              if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
+                  raise ValueError('Invalid release tag')
+              return source_sha, tag
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
+                                         os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
+          if not re.fullmatch(r'[a-f0-9]{64}', os.environ['EXPECTED_MANIFEST_SHA256']):
+              raise SystemExit('Recovery workflow awaits the new root-approved manifest SHA-256')
+          if platform.system() != 'Windows' or platform.machine().lower() not in ('amd64', 'x86_64'):
+              raise SystemExit('Native Windows x64 runner required')
+          if sys.version_info < (3, 12):
+              raise SystemExit('Runner Python 3.12 or later is required for safe tar extraction')
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          root.mkdir(exist_ok=False)
+          evidence = root / 'evidence'
+          evidence.mkdir()
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
+          repository = api('repos/' + repo)
+          if repository.get('private') is not True:
+              raise SystemExit('A private repository is required')
+          def find_draft_release(repo, tag):
+              matches = []
+              for page in range(1, 21):
+                  rows = api('repos/' + repo + '/releases?per_page=100&page=' + str(page))
+                  matches.extend(row for row in rows if row.get('tag_name') == tag)
+                  if len(rows) < 100:
+                      break
+              else:
+                  raise SystemExit('Draft lookup exceeded the bounded release list')
+              if len(matches) != 1 or matches[0].get('draft') is not True:
+                  raise SystemExit('Exactly one existing draft with the selected tag is required')
+              return matches[0]
+          release = find_draft_release(repo, tag)
+          if release.get('draft') is not True or release.get('tag_name') != tag:
+              raise SystemExit('The selected existing release must remain a draft')
+          commit = api('repos/' + repo + '/commits/' + source_sha)
+          if commit.get('sha') != source_sha:
+              raise SystemExit('GitHub did not resolve the exact requested source commit')
+          archive = root / 'source.tar.gz'
+          with archive.open('xb') as stream:
+              subprocess.run(['gh', 'api', '--hostname', 'github.com',
+                              'repos/' + repo + '/tarball/' + source_sha], stdout=stream, check=True, timeout=600)
+          with tarfile.open(archive, 'r:gz') as source:
+              names = source.getmembers()
+              tops = {pathlib.PurePosixPath(item.name).parts[0] for item in names}
+              if len(tops) != 1:
+                  raise SystemExit('Source archive must have one repository root')
+              for item in names:
+                  path = pathlib.PurePosixPath(item.name)
+                  if path.is_absolute() or '..' in path.parts or '\\' in item.name or any(':' in part for part in path.parts) or not (item.isfile() or item.isdir()):
+                      raise SystemExit('Unsafe source archive member')
+              source.extractall(root / 'source', filter='data')
+          checkout = root / 'source' / tops.pop()
+          manifest_path = checkout / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
+          if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('The committed recovery source manifest differs from the prepared release freeze')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          if manifest.get('freeze_format_version') != 2 or not isinstance(manifest['targets'].get('windows-x64'), int) or manifest['targets']['windows-x64'] <= 0 or len(manifest['target_files']['windows-x64']) != manifest['targets']['windows-x64']:
+              raise SystemExit('Unexpected recovery target manifest')
+          for name, record in manifest['files'].items():
+              relative = pathlib.PurePosixPath(record['source'])
+              if relative.is_absolute() or '..' in relative.parts:
+                  raise SystemExit('Manifest source escaped the checkout')
+              path = checkout.joinpath(*relative.parts).resolve(strict=True)
+              if not path.is_relative_to(checkout.resolve()) or not path.is_file():
+                  raise SystemExit('Manifest source is not a checked-out file')
+              if hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() != record['sha256']:
+                  raise SystemExit('Committed application source differs: ' + name)
+          if hashlib.file_digest((checkout / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
+              raise SystemExit('Committed builder differs from the source freeze')
+          receipt = {'repository': repo, 'source_sha': source_sha, 'source_tree_sha': commit['commit']['tree']['sha'],
+                     'source_archive_sha256': hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest(),
+                     'source_manifest_sha256': manifest_sha, 'application_union_count': len(manifest['files']),
+                     'windows_application_count': manifest['targets']['windows-x64'], 'release_tag': tag,
+                     'draft_release_id': release['id'], 'draft_target_commitish': release.get('target_commitish'), 'platform': platform.platform(), 'architecture': platform.machine()}
+          (evidence / 'source-receipt.json').write_text(json.dumps(receipt, indent=2))
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('SOURCE_DIR=' + str(checkout) + '\n')
+          print('Exact source commit and all frozen application sources verified')
+          '@ | python -X utf8 -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and audit the complete frozen Windows portable
+        run: |
+          @'
+          import hashlib, importlib.util, json, os, pathlib, stat, subprocess, sys, zipfile
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
+          evidence = root / 'evidence'
+          manifest_path = source / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('The pinned source manifest changed before build')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          expected = {name: manifest['files'][name]['sha256'] for name in manifest['target_files']['windows-x64']}
+          spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
+          builder = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(builder)
+          if builder.ARTIFACT_SUFFIX != '-foundation-recovery-20261011':
+              raise SystemExit('The recovery builder suffix is required')
+          actual_sources = builder.application_files('windows-x64')
+          actual = {name: hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() for path, name in actual_sources}
+          if len(actual_sources) != len(actual) or actual != expected or len(actual) != manifest['targets']['windows-x64']:
+              raise SystemExit('The actual Windows target differs from the exact frozen manifest')
+          venv = root / 'build-venv'
+          subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True, timeout=120)
+          python = venv / 'Scripts/python.exe'
+          if (source / 'dist' / ('desktop-build-results' + builder.ARTIFACT_SUFFIX + '.json')).exists():
+              raise SystemExit('Fresh source checkout contains preexisting build results')
+          with (evidence / 'build.log').open('w', encoding='utf-8') as log:
+              subprocess.run([str(python), '-I', '-B', str(source / 'desktop/build.py'), '--target', 'windows-x64'],
+                             cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+          results = json.loads((source / 'dist' / ('desktop-build-results' + builder.ARTIFACT_SUFFIX + '.json')).read_text(encoding='utf-8'))
+          if len(results) != 1 or results[0]['target'] != 'windows-x64':
+              raise SystemExit('Only the requested Windows target may be built')
+          result = results[0]
+          archive = pathlib.Path(result['archive']).resolve(strict=True)
+          portable = pathlib.Path(result['portable_directory']).resolve(strict=True)
+          dist = (source / 'dist').resolve(strict=True)
+          if not archive.is_relative_to(dist) or not portable.is_relative_to(dist) or not portable.is_dir():
+              raise SystemExit('Build artifacts escaped the owned checkout dist')
+          if archive.name != 'PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011.zip' or not portable.name.startswith('PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011-'):
+              raise SystemExit('Windows archive/portable suffix differs')
+          archive_sha = hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest()
+          if archive_sha != result['sha256'] or archive.stat().st_size != result['size_bytes']:
+              raise SystemExit('Built archive differs from the builder result')
+          if result['validation'].get('application_file_count') != len(expected) or result['validation'].get('application_manifest_completeness') != 'passed':
+              raise SystemExit('Builder result does not bind the complete frozen Windows application')
+
+          def inventory(directory):
+              pending, files = [directory], set()
+              while pending:
+                  with os.scandir(pending.pop()) as entries:
+                      for entry in entries:
+                          info = entry.stat(follow_symlinks=False)
+                          if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & getattr(stat, 'FILE_ATTRIBUTE_REPARSE_POINT', 0x400):
+                              raise ValueError('Portable symlink/reparse point is not allowed')
+                          path = pathlib.Path(entry.path)
+                          if not path.resolve(strict=True).is_relative_to(directory):
+                              raise ValueError('Portable path escaped its owned root')
+                          if stat.S_ISDIR(info.st_mode):
+                              pending.append(path)
+                          elif stat.S_ISREG(info.st_mode):
+                              files.add(path.relative_to(directory).as_posix())
+                          else:
+                              raise ValueError('Portable contains a nonregular file')
+              return files
+
+          private_leaves = {'.env', '.npmrc', 'connection.secure', 'cookies.sqlite', 'state.json', 'storage_state.json', 'api_keys.json', 'credentials.json', 'local_settings.json', 'legacy_main.py'}
+          private_suffixes = ('.db', '.sqlite', '.sqlite3', '.sqlite-wal', '.sqlite-shm', '.sqlite-journal', '.sqlite3-wal', '.sqlite3-shm', '.sqlite3-journal', '.db-wal', '.db-shm', '.db-journal', '.lnk', '.pfx', '.p12')
+          private_parts = {'.peace-atlas', '.dsh', '.deepseek-harness', 'appdata', 'user-data', 'userdata'}
+          portable_expected, application_actual = set(), set()
+          application_roots = ('app/', 'backend/', 'harness/')
+          verified_files = 0
+          with zipfile.ZipFile(archive) as bundle:
+              entries = bundle.infolist()
+              names = [entry.filename for entry in entries]
+              if len(names) != len(set(names)) or len(names) != len({name.casefold() for name in names}):
+                  raise SystemExit('Windows ZIP has duplicate or case-colliding entries')
+              prefix = portable.name + '/resources/'
+              if [name for name in names if name.endswith('/build-manifest.json')] != [prefix + 'build-manifest.json']:
+                  raise SystemExit('Exactly the owned portable build manifest is required')
+              packed = json.loads(bundle.read(prefix + 'build-manifest.json'))
+              rows = packed['application_files']
+              hashes = {row['path']: row['sha256'] for row in rows}
+              if len(rows) != len(hashes) or hashes != expected or packed['target'] != 'windows-x64' or packed['product'] != 'PEACE ATLAS' or packed['version'] != '2.0.0':
+                  raise SystemExit('Packaged application hashes/product/target differ from the pinned source')
+              for entry in entries:
+                  parts = pathlib.PurePosixPath(entry.filename).parts
+                  if not parts or parts[0] != portable.name or '\\' in entry.filename or '..' in parts or any(':' in part for part in parts) or entry.filename.startswith('/'):
+                      raise SystemExit('Unsafe Windows ZIP path')
+                  leaf, folded = parts[-1].casefold(), {part.casefold() for part in parts}
+                  if leaf in private_leaves or leaf.startswith('.env.') or leaf.endswith(private_suffixes) or folded & private_parts:
+                      raise SystemExit('Private-state/credential filename shipped')
+                  if entry.is_dir():
+                      continue
+                  if stat.S_ISLNK(entry.external_attr >> 16):
+                      raise SystemExit('Windows ZIP contains a symlink')
+                  relative = pathlib.PurePosixPath(*parts[1:])
+                  target = portable.joinpath(*relative.parts).resolve(strict=True)
+                  if not target.is_relative_to(portable) or not target.is_file():
+                      raise SystemExit('ZIP file missing from the owned portable tree')
+                  with bundle.open(entry) as stream:
+                      value = hashlib.file_digest(stream, 'sha256').hexdigest()  # Reading to EOF also verifies this member's CRC.
+                  if hashlib.file_digest(target.open('rb'), 'sha256').hexdigest() != value:
+                      raise SystemExit('Portable file bytes differ from the ZIP')
+                  portable_expected.add(relative.as_posix())
+                  verified_files += 1
+                  if entry.filename.startswith(prefix):
+                      app_name = entry.filename[len(prefix):]
+                      if app_name.startswith(application_roots):
+                          application_actual.add(app_name)
+                      if app_name in expected and value != expected[app_name]:
+                          raise SystemExit('Packaged application payload differs from the freeze: ' + app_name)
+              wanted = {name for name in expected if name.startswith(application_roots)}
+              if application_actual != wanted or any(prefix + name not in names for name in expected):
+                  raise SystemExit('Actual application tree has missing or unlisted bytes')
+              if len(entries) != result['validation']['entry_count']:
+                  raise SystemExit('Actual ZIP entry count differs from the builder result')
+          if inventory(portable) != portable_expected:
+              raise SystemExit('Owned portable full inventory differs from the ZIP, including extras')
+          if hashlib.file_digest((source / 'desktop/build.py').open('rb'), 'sha256').hexdigest() != manifest['builder_sha256']:
+              raise SystemExit('Builder changed during build')
+          for path, name in actual_sources:
+              if hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() != expected[name]:
+                  raise SystemExit('Frozen Windows source changed during build')
+          (evidence / 'build-result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+          (evidence / 'package-audit.json').write_text(json.dumps({'ok': True, 'archive_sha256': archive_sha, 'application_count': len(expected),
+              'zip_regular_files_crc_and_portable_hash_verified': verified_files, 'portable_full_inventory_exact': True,
+              'actual_application_tree_exact': True, 'private_state_filenames_absent': True}, indent=2), encoding='utf-8')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('RAW_ARCHIVE=' + str(archive) + '\nPORTABLE_DIR=' + str(portable) + '\n')
+          print('Frozen Windows ZIP and every owned portable file verified; source full suites were not repeated')
+          '@ | python -X utf8 -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run isolated packaged native desktop and browser acceptance
+        run: |
+          @'
+          import hashlib, json, os, pathlib, struct, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          evidence = root / 'evidence'
+          portable = pathlib.Path(os.environ['PORTABLE_DIR']).resolve(strict=True)
+          source = pathlib.Path(os.environ['SOURCE_DIR']).resolve(strict=True)
+          resources = portable / 'resources'
+          profile, home, temp = (evidence / name for name in ('isolated-profile', 'owned-home', 'owned-temp'))
+          for path in (profile, home, temp, home / 'Roaming', home / 'Local'):
+              path.mkdir(exist_ok=False)
+          safe_names = {'PATH', 'SYSTEMROOT', 'WINDIR', 'SYSTEMDRIVE', 'COMSPEC', 'PATHEXT', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE'}
+          env = {name: value for name, value in os.environ.items() if name.upper() in safe_names}
+          env.update(HOME=str(home), USERPROFILE=str(home), APPDATA=str(home / 'Roaming'), LOCALAPPDATA=str(home / 'Local'),
+                     TEMP=str(temp), TMP=str(temp), PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
+                     WORKBENCH_DATA_DIR=str(profile), WORKBENCH_SMOKE_EXIT='1', WORKBENCH_SMOKE_BACKUP='1',
+                     WORKBENCH_SMOKE_TYPOGRAPHY='1', WORKBENCH_SMOKE_BUDGETS='1')
+          executable, python = portable / 'PEACE ATLAS.exe', resources / 'python/python.exe'
+          if not executable.is_file() or not python.is_file():
+              raise SystemExit('Packaged Windows main/private Python missing')
+          with (evidence / 'native-launch.log').open('w', encoding='utf-8') as log:
+              child = subprocess.Popen([str(executable)], cwd=portable, env=env, stdout=log, stderr=subprocess.STDOUT)
+              try:
+                  status = child.wait(timeout=420)
+              except subprocess.TimeoutExpired:
+                  # This exact PID and its descendants belong to this isolated acceptance launch.
+                  subprocess.run(['taskkill', '/PID', str(child.pid), '/T', '/F'], stdout=log, stderr=subprocess.STDOUT,
+                                 check=False, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                  child.wait(timeout=30)
+                  raise SystemExit('Owned native smoke timed out; only its owned process tree was stopped')
+          if status != 0:
+              raise SystemExit('Native desktop smoke exited with code ' + str(status))
+          smoke = json.loads((profile / 'desktop-smoke.json').read_text(encoding='utf-8'))
+          if smoke.get('version') != '2.0.0' or smoke.get('health', {}).get('ok') is not True or smoke['health'].get('storage') != 'sqlite':
+              raise SystemExit('Native packaged backend/desktop health failed')
+          checks = smoke['checks']
+          if checks.get('secure_storage') is not True:
+              raise SystemExit('Native Windows secure-storage roundtrip failed')
+          if any(name in checks for name in ('sessions', 'collection', 'report', 'research', 'connection_recovery')):
+              raise SystemExit('A paid/network/account operation was unexpectedly requested')
+          if checks.get('budgets', {}).get('boundary_preview_ready') is not True or checks['budgets'].get('preview_created_jobs') != 0:
+              raise SystemExit('Read-only budget boundary preview failed or created jobs')
+          for surface in ('overview', 'workspace'):
+              details = checks['typography'][surface]
+              if details.get('horizontal_overflow') is not False or not all(any(font['status'] == 'loaded' and family in font['family'] for font in details['fonts']) for family in ('Atlas Mincho', 'Atlas Signal')):
+                  raise SystemExit('Native bundled fonts/layout acceptance failed')
+          if checks['typography']['composer'].get('dialog_overflow') is not False:
+              raise SystemExit('Native composer overflowed')
+          images = []
+          for name in ('desktop-smoke.png', 'desktop-eva-overview.png', 'desktop-eva-workspace.png', 'desktop-eva-composer.png', 'desktop-budget-controls.png', 'desktop-budget-preview.png', 'desktop-backup-controls.png'):
+              data = (profile / name).read_bytes()
+              if data[:8] != b'\x89PNG\r\n\x1a\n' or data[12:16] != b'IHDR':
+                  raise SystemExit('Native screenshot is not a PNG')
+              width, height = struct.unpack('>II', data[16:24])
+              if width < 640 or height < 400:
+                  raise SystemExit('Native screenshot dimensions are invalid')
+              images.append({'name': name, 'width': width, 'height': height, 'sha256': hashlib.sha256(data).hexdigest()})
+          backup = checks['backup']
+          if backup.get('state') != 'completed' or backup.get('sqlite_header') is not True or backup.get('source_draft_unchanged') is not True:
+              raise SystemExit('Native backup download did not preserve the draft')
+          proof = r"""
+          import hashlib, json, pathlib, sqlite3, sys
+          profile = pathlib.Path(sys.argv[1]).resolve(strict=True)
+          smoke = json.loads((profile / 'desktop-smoke.json').read_text(encoding='utf-8'))
+          backup = smoke['checks']['backup']
+          path = pathlib.Path(backup['file']).resolve(strict=True)
+          assert path.is_relative_to((profile / 'smoke-downloads').resolve(strict=True))
+          with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as database:
+              assert database.execute('PRAGMA quick_check').fetchall() == [('ok',)]
+              assert database.execute('PRAGMA foreign_key_check').fetchall() == []
+              tables = {row[0] for row in database.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+              assert 'wb_public_source_cache' in tables
+              row = database.execute("SELECT data,revision FROM wb_drafts WHERE key='collection'").fetchone()
+              assert row and json.loads(row[0])['values']['keyword'] == backup['draft_keyword'] and row[1] == backup['draft_revision']
+              assert database.execute('SELECT COUNT(*) FROM wb_jobs').fetchone()[0] == 0
+          assert not (profile / 'connection.secure').exists()
+          result = {'ok': True, 'python': sys.executable, 'quick_check': 'ok', 'foreign_key_errors': 0,
+                    'committed_draft_marker_and_revision_match': True, 'source_cache_table_present': True,
+                    'jobs_created': 0, 'connection_export_or_saved_ai_config': False,
+                    'backup_sha256': hashlib.file_digest(path.open('rb'), 'sha256').hexdigest(), 'backup_bytes': path.stat().st_size}
+          pathlib.Path(sys.argv[2]).write_text(json.dumps(result, indent=2), encoding='utf-8')
+          """
+          with (evidence / 'backup-verification.log').open('w', encoding='utf-8') as log:
+              subprocess.run([str(python), '-I', '-B', '-c', proof, str(profile), str(evidence / 'backup-verification.json')],
+                             env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=60)
+          backup_proof = json.loads((evidence / 'backup-verification.json').read_text(encoding='utf-8'))
+          with (evidence / 'bundled-browser.log').open('w', encoding='utf-8') as log:
+              subprocess.run([str(python), '-I', '-B', str(resources / 'backend/browser_smoke.py'),
+                              '--browsers-path', str(resources / 'browsers'), '--output', str(evidence / 'browser-smoke.json')],
+                             env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+          browser = json.loads((evidence / 'browser-smoke.json').read_text(encoding='utf-8'))
+          if browser.get('ok') is not True or {row['mode'] for row in browser['checks']} != {'headless', 'visible'} or any(row['url'] != 'about:blank' for row in browser['checks']):
+              raise SystemExit('Both private offline browser modes must pass')
+          if pathlib.Path(browser['python']).resolve(strict=True) != python.resolve(strict=True) or not pathlib.Path(browser['executable']).resolve(strict=True).is_relative_to((resources / 'browsers').resolve(strict=True)):
+              raise SystemExit('Browser smoke used a host interpreter/browser')
+          manifest_path = source / 'docs/release-evidence/recovery-source-manifest-20261011.json'
+          if hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest() != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('Committed manifest changed during acceptance')
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          for name in manifest['target_files']['windows-x64']:
+              if hashlib.file_digest((resources / name).open('rb'), 'sha256').hexdigest() != manifest['files'][name]['sha256']:
+                  raise SystemExit('Native smoke changed frozen application bytes: ' + name)
+          result = json.loads((evidence / 'build-result.json').read_text(encoding='utf-8'))
+          assets = root / 'release-assets'
+          assets.mkdir()
+          asset_name = ('PEACE-ATLAS-2.0.0-windows-x64-foundation-recovery-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+                        + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
+          source_receipt = json.loads((evidence / 'source-receipt.json').read_text(encoding='utf-8'))
+          acceptance = {**source_receipt, 'ok': True, 'native_accepted_archive': asset_name, 'native_accepted_archive_sha256': result['sha256'],
+              'native_desktop_backend': True, 'native_secure_storage_roundtrip': True, 'native_backup': backup_proof,
+              'typography_fonts_and_no_overflow': True, 'budget_boundary_preview_created_jobs': 0,
+              'bundled_browser': browser, 'screenshots': images, 'frozen_application_payload_after_native_exact': True,
+              'real_model_calls': 0, 'external_collection_requested': False, 'formal_user_data_accessed': False,
+              'credential_or_agent_connection_exported': False, 'publisher_code_signing': 'not performed; candidate remains unsigned',
+              'visual_inspection': 'actual capture and layout/font assertions; human screenshot review not performed by CI',
+              'provenance': 'new Windows runner build from pinned full commit; no equality claim to prior local ZIP',
+              'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']}
+          (evidence / 'acceptance.json').write_text(json.dumps(acceptance, indent=2), encoding='utf-8')
+          (assets / (asset_name + '.sha256')).write_text(result['sha256'] + '  ' + asset_name + '\n', encoding='utf-8')
+          (assets / (asset_name + '.acceptance.json')).write_text(json.dumps(acceptance, indent=2), encoding='utf-8')
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
+              output.write('UPLOAD_ARCHIVE_NAME=' + asset_name + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('Isolated Windows native acceptance passed for full commit ' + os.environ['SOURCE_SHA'] + '.\n\n')
+              summary.write('ZIP SHA-256: ' + result['sha256'] + '. Desktop/SQLite backup/fonts/read-only budget preview/private browser passed. No real model, external collection or formal profile was used. This unsigned candidate is a new runner-built archive.\n')
+          '@ | python -X utf8 -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload only accepted assets to the same existing private draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          import hashlib, json, os, pathlib, re, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-windows-source'
+          repo, tag = os.environ['GITHUB_REPOSITORY'], os.environ['RELEASE_TAG']
+          if repo != os.environ['EXPECTED_REPOSITORY'] or not re.fullmatch(r'[a-f0-9]{40}', os.environ['SOURCE_SHA']):
+              raise SystemExit('Repository or source input changed')
+          if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]{0,126}', tag) or '..' in tag:
+              raise SystemExit('Invalid release tag')
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', '--hostname', 'github.com', path], timeout=120))
+          accepted = json.loads((root / 'evidence/acceptance.json').read_text(encoding='utf-8'))
+          if accepted.get('ok') is not True or accepted['source_sha'] != os.environ['SOURCE_SHA'] or accepted['release_tag'] != tag or accepted['source_manifest_sha256'] != os.environ['EXPECTED_MANIFEST_SHA256']:
+              raise SystemExit('Complete same-input native acceptance is required before upload')
+          release = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
+          if api('repos/' + repo).get('private') is not True or release.get('draft') is not True or release['id'] != accepted['draft_release_id'] or release.get('tag_name') != tag:
+              raise SystemExit('The same private draft must still exist')
+          archive = pathlib.Path(os.environ['RAW_ARCHIVE']).resolve(strict=True)
+          source_dist = (pathlib.Path(os.environ['SOURCE_DIR']) / 'dist').resolve(strict=True)
+          if not archive.is_relative_to(source_dist) or hashlib.file_digest(archive.open('rb'), 'sha256').hexdigest() != accepted['native_accepted_archive_sha256']:
+              raise SystemExit('The exact native-tested ZIP changed before upload')
+          asset_name = accepted['native_accepted_archive']
+          if asset_name != os.environ['UPLOAD_ARCHIVE_NAME'] or not re.fullmatch(r'PEACE-ATLAS-2\.0\.0-windows-x64-foundation-recovery-20261011-native-[a-f0-9]{12}-run[0-9]+-[0-9]+\.zip', asset_name):
+              raise SystemExit('Unexpected candidate asset name')
+          assets = root / 'release-assets'
+          sidecars = [assets / (asset_name + '.sha256'), assets / (asset_name + '.acceptance.json')]
+          if {path.name for path in assets.iterdir()} != {path.name for path in sidecars}:
+              raise SystemExit('Only acceptance/hash sidecars may accompany the audited ZIP')
+          wanted_names = {asset_name, *(path.name for path in sidecars)}
+          if wanted_names & {asset['name'] for asset in release['assets']}:
+              raise SystemExit('Candidate asset already exists; replacement is forbidden')
+          # A hard link gives gh a unique filename without copying/recompressing 400 MB.
+          # Both paths remain in the same owned runner volume and reference the tested ZIP.
+          upload_archive = assets / asset_name
+          os.link(archive, upload_archive)
+          all_assets = [upload_archive, *sidecars]
+          # No --clobber. gh uses its authenticated release-list fallback for this private draft.
+          subprocess.run(['gh', 'release', 'upload', tag, *map(str, all_assets), '--repo', repo], check=True, timeout=1200)
+          after = api('repos/' + repo + '/releases/' + str(accepted['draft_release_id']))
+          if after.get('draft') is not True or after['id'] != accepted['draft_release_id'] or after.get('tag_name') != tag:
+              raise SystemExit('Private draft identity changed during upload')
+          uploaded = {asset['name']: asset for asset in after['assets']}
+          records = []
+          for path in all_assets:
+              asset = uploaded.get(path.name)
+              expected_sha = accepted['native_accepted_archive_sha256'] if path == upload_archive else hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
+              if not asset or asset.get('state') != 'uploaded' or asset.get('size') != path.stat().st_size or asset.get('digest') != 'sha256:' + expected_sha:
+                  raise SystemExit('GitHub server size/state/SHA-256 digest differs from accepted asset: ' + path.name)
+              records.append({'id': asset['id'], 'name': path.name, 'sha256': expected_sha, 'bytes': path.stat().st_size, 'server_digest_verified': True})
+          (root / 'evidence/upload-receipt.json').write_text(json.dumps({'ok': True, 'repository': repo, 'release_tag': tag,
+              'release_id': after['id'], 'draft': True, 'source_sha': accepted['source_sha'],
+              'source_manifest_sha256': accepted['source_manifest_sha256'], 'assets': records}, indent=2), encoding='utf-8')
+          print('Accepted ZIP/hash/acceptance uploaded without replacement; all server SHA-256 digests verified')
+          '@ | python -X utf8 -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Preserve small owned native evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-native-source-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/*.json
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/*.log
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-smoke*.json
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-smoke.png
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-eva-*.png
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-budget-*.png
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/desktop-backup-controls.png
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/logs/desktop.log
+            ${{ runner.temp }}/peace-atlas-windows-source/evidence/isolated-profile/logs/backend.log
+            ${{ runner.temp }}/peace-atlas-windows-source/release-assets/*.sha256
+            ${{ runner.temp }}/peace-atlas-windows-source/release-assets/*.acceptance.json
