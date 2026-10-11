@@ -5,6 +5,8 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import plistlib
+import stat
 import subprocess
 import tarfile
 from tempfile import TemporaryDirectory
@@ -266,6 +268,108 @@ class AgentAssetPackagingTests(unittest.TestCase):
                 BUILD.application_files("windows-x64")
 
 
+class MacExecutablePackagingTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = TemporaryDirectory(prefix="peace-atlas-mac-executable-test-")
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.prefix = "PEACE ATLAS.app/"
+        self.resources = self.prefix + "Contents/Resources/"
+
+    @staticmethod
+    def write_member(archive, name, data, mode=stat.S_IFREG | 0o644):
+        info = zipfile.ZipInfo(name)
+        info.create_system = 3
+        info.external_attr = mode << 16
+        archive.writestr(info, data)
+
+    def test_main_binary_and_plist_are_renamed_together_preserving_helpers_and_mode(self):
+        runtime = self.root / "electron.zip"
+        helper = "Contents/Frameworks/Electron Helper.app/Contents/"
+        with zipfile.ZipFile(runtime, "w") as source:
+            self.write_member(source, "Electron.app/Contents/Info.plist", plistlib.dumps({"CFBundleExecutable": "Electron"}))
+            self.write_member(source, "Electron.app/Contents/MacOS/Electron", b"main-runtime", stat.S_IFREG | 0o755)
+            self.write_member(source, "Electron.app/" + helper + "Info.plist", plistlib.dumps({}))
+            self.write_member(source, "Electron.app/" + helper + "MacOS/Electron Helper", b"helper-runtime", stat.S_IFREG | 0o755)
+        output = self.root / "renamed.zip"
+        archive = BUILD.Archive(output)
+        try:
+            BUILD.append_electron(archive, runtime, "macos-arm64", self.prefix)
+        finally:
+            archive.close()
+        with zipfile.ZipFile(output) as packaged:
+            main = self.prefix + "Contents/MacOS/PEACE ATLAS"
+            self.assertEqual(packaged.read(main), b"main-runtime")
+            self.assertTrue((packaged.getinfo(main).external_attr >> 16) & stat.S_IXUSR)
+            self.assertNotIn(self.prefix + "Contents/MacOS/Electron", packaged.namelist())
+            self.assertEqual(plistlib.loads(packaged.read(self.prefix + "Contents/Info.plist"))["CFBundleExecutable"], "PEACE ATLAS")
+            self.assertEqual(packaged.read(self.prefix + helper + "MacOS/Electron Helper"), b"helper-runtime")
+            self.assertEqual(plistlib.loads(packaged.read(self.prefix + helper + "Info.plist"))["CFBundleExecutable"], "Electron Helper")
+
+    def complete_archive(self, *, main="PEACE ATLAS", declared="PEACE ATLAS", executable=True, legacy=False, duplicate=False):
+        output = self.root / "audit.zip"
+        site = self.resources + "python/lib/python3.12/site-packages/"
+        browser = self.resources + f"browsers/chromium-{BUILD.CHROMIUM_REVISION}/chrome-{BUILD.CHROMIUM_TARGETS['macos-arm64']}/Google Chrome for Testing.app/Contents/"
+        with zipfile.ZipFile(output, "w") as archive:
+            for name in ("backend/backend_entry.py", "app/main.cjs", "app/preload.cjs", "harness/sidecar.mjs", "harness/runtime-manifest.json", "backend/app/workbench/server.py", "backend/app/static/workbench/index.html"):
+                self.write_member(archive, self.resources + name, b"fixture")
+            self.write_member(archive, self.prefix + "Contents/Info.plist", plistlib.dumps({"CFBundleExecutable": declared, "LSMinimumSystemVersion": "13.0"}))
+            self.write_member(archive, browser + "Info.plist", plistlib.dumps({"LSMinimumSystemVersion": "13.0"}))
+            self.write_member(archive, site + "playwright/driver/package/browsers.json", json.dumps({"browsers": [{"name": "chromium", "revision": BUILD.CHROMIUM_REVISION, "browserVersion": BUILD.CHROMIUM_VERSION}]}).encode())
+            for name in ("greenlet/__init__.py", "pyee/__init__.py"):
+                self.write_member(archive, site + name, b"fixture")
+            for name in (self.resources + "python/bin/python3.12", site + "playwright/driver/node", browser + "MacOS/Google Chrome for Testing"):
+                self.write_member(archive, name, b"executable-fixture", stat.S_IFREG | 0o755)
+            self.write_member(archive, self.resources + "python/bin/python3", b"python3.12", stat.S_IFLNK | 0o755)
+            if main is not None:
+                name = self.prefix + "Contents/MacOS/" + main
+                self.write_member(archive, name, b"main-fixture", stat.S_IFREG | (0o755 if executable else 0o644))
+                if duplicate:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        self.write_member(archive, name, b"duplicate", stat.S_IFREG | 0o755)
+            if legacy:
+                self.write_member(archive, self.prefix + "Contents/MacOS/Electron", b"legacy-runtime", stat.S_IFREG | 0o755)
+        return output
+
+    def validate(self, **options):
+        # Source completeness has independent ManifestTests; this fixture isolates
+        # the real archive audit's executable/plist/Unix metadata contract.
+        with patch.object(BUILD, "validate_application_manifest", return_value=1):
+            return BUILD.validate_archive(self.complete_archive(**options), "macos-arm64", self.resources)
+
+    def test_renamed_main_archive_passes_the_actual_archive_audit(self):
+        self.assertEqual(self.validate()["macos_symlinks_and_modes"], "passed")
+
+    def test_unrenamed_electron_archive_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "main executable"):
+            self.validate(main="Electron", declared="Electron")
+
+    def test_plist_cannot_point_to_a_different_executable(self):
+        with self.assertRaisesRegex(RuntimeError, "main executable"):
+            self.validate(declared="Other")
+
+    def test_missing_or_duplicate_main_executable_is_rejected(self):
+        for options in ({"main": None}, {"duplicate": True}):
+            with self.subTest(options=options), self.assertRaisesRegex(RuntimeError, "main executable"):
+                self.validate(**options)
+
+    def test_legacy_main_cannot_remain_beside_the_renamed_binary(self):
+        with self.assertRaisesRegex(RuntimeError, "main executable"):
+            self.validate(legacy=True)
+
+    def test_main_executable_must_keep_its_executable_bit(self):
+        with self.assertRaisesRegex(RuntimeError, "executable bit"):
+            self.validate(executable=False)
+
+    def test_finalizer_reads_and_validates_the_main_name_from_plist(self):
+        self.assertIn("Print CFBundleExecutable", BUILD.MAC_FINALIZE)
+        self.assertIn('"$APP/Contents/MacOS/$MAIN_EXECUTABLE"', BUILD.MAC_FINALIZE)
+        self.assertIn('[ "$MAIN_EXECUTABLE" != "PEACE ATLAS" ]', BUILD.MAC_FINALIZE)
+        self.assertNotIn('WORKBENCH_DATA_DIR="$SMOKE_DIR" "$APP/Contents/MacOS/Electron"', BUILD.MAC_FINALIZE)
+        self.assertNotIn("ELECTRON_FORCE_IS_PACKAGED", BUILD.MAC_FINALIZE)
+
+
 class ApplicationFilesTests(unittest.TestCase):
     def test_current_targets_include_backup_and_every_workbench_module(self):
         base = BUILD.ROOT / "analysis-worker/app/workbench"
@@ -284,9 +388,9 @@ class ApplicationFilesTests(unittest.TestCase):
                 self.assertFalse(any(Path(name).name in {".env", "connection.secure", "workbench.sqlite3", "legacy_main.py"} for name in names))
 
     def test_candidate_finalizer_uses_the_current_suffix(self):
-        self.assertEqual(BUILD.ARTIFACT_SUFFIX, "-foundation-reuse-20261011")
+        self.assertEqual(BUILD.ARTIFACT_SUFFIX, "-foundation-recovery-20261011")
         finalizer = BUILD.MAC_FINALIZE.replace("@TARGET@", "macos-arm64").replace("@ARTIFACT_SUFFIX@", BUILD.ARTIFACT_SUFFIX)
-        self.assertIn("PEACE-ATLAS-2.0.0-macos-arm64-foundation-reuse-20261011-adhoc.zip", finalizer)
+        self.assertIn("PEACE-ATLAS-2.0.0-macos-arm64-foundation-recovery-20261011-adhoc.zip", finalizer)
         self.assertNotIn("@ARTIFACT_SUFFIX@", finalizer)
 
 

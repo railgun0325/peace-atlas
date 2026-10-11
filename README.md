@@ -2,16 +2,16 @@
 
 日本和平与反战运动公开信息研究工作台。把新闻、社媒正文、来源账号、可核对关系、活动线索与研究报告保存在本机；每项结论保留原文出处和生成时的证据快照，方便回查、续研和导出。
 
-当前源码与候选包为 **PEACE ATLAS 2.0.0 · 2026-10-11 来源复用与报告恢复版**，对应冻结构建 `20261011-041440`，发布标签为 `v2.0.0-foundation-reuse.20261011`。上传、正式升级及平台验收状态以[本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md)为准；草稿或候选包不代表全部平台已完成原生验证。
+当前源码为 **PEACE ATLAS 2.0.0 · 2026-10-11 报告续跑与跨平台启动修复候选**，发布标签为 `v2.0.0-foundation-recovery.20261011`。本批正在完成合并后的完整回归、原生构建与真实模型续跑。上传、正式升级及平台验收状态以[本轮发布记录](docs/RELEASE_RECOVERY_20261011.md)为准；草稿或源码提交不代表安装包已经验收或发布。
 
 ## 下载与开始使用
 
-[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮候选 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-foundation-reuse.20261011)
+[私有仓库](https://github.com/railgun0325/peace-atlas) · [本轮候选 Release](https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-foundation-recovery.20261011)
 
-| 系统 | 发布资产 | 启动方式与验收范围 |
+| 系统 | 资产与启动方式 | 当前验收状态 |
 | --- | --- | --- |
-| Windows x64 | [Windows ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-foundation-reuse.20261011/PEACE-ATLAS-2.0.0-windows-x64-foundation-reuse-20261011.zip) | 完整解压目录，双击 `PEACE ATLAS.exe`。桌面包自带 Python、Electron、Chromium 和固定 DSH 运行时。 |
-| Apple Silicon macOS 13+ | [macOS ARM64 ZIP](https://github.com/railgun0325/peace-atlas/releases/download/v2.0.0-foundation-reuse.20261011/PEACE-ATLAS-2.0.0-macos-arm64-foundation-reuse-20261011.zip) | 包结构、文件、哈希、权限与符号链接已检查；Mac 原生启动、Apple 原生签名验证及公证尚未验收。使用前按[构建文档](desktop/BUILDING.md)核对本机收尾步骤。 |
+| Windows x64 | 发布后从本轮 Release 下载 `windows-x64` ZIP，完整解压后双击 `PEACE ATLAS.exe`。包内自带 Python、Electron、Chromium 和固定 DSH 运行时。 | 等待本批最终构建与原生验收。 |
+| Apple Silicon macOS 13+ | 发布后从本轮 Release 下载 `macos-arm64` ZIP；精确文件名和 SHA256 随资产提供。 | 旧包已发现主程序名称错误，本批修复后将重新执行 Mac 原生验收；未进行 Apple Developer ID 签名与公证。 |
 
 仓库和 Release 为私有。接收者需要使用受邀并获仓库访问权限的 GitHub 账号；链接或二维码只负责打开页面，不授予访问权限。分享前由仓库所有者明确授权访问。旧自动审核修复版保留独立的[标签与记录](docs/RELEASE_20261011.md)，不替换旧包内容。下载前检查本轮 Release 是否已发布并包含相应完整资产。
 
@@ -28,7 +28,7 @@
 
 本版已接入官方 **DeepSeek Harness SDK/runtime 0.2.0-rc.2** 的实际工具调用循环。模型通过 API 发出请求，DSH 运行时根据任务调用受约束的证据工具，工具结果再进入后续模型决策、来源复核和保存流程。桌面包使用自身 Electron 的 Node 运行时，用户无需另行启动 DSH 桌面应用。模型名称以用户保存的连接及提供方实际支持为准，默认建议为 `deepseek-flash`。
 
-本次冻结源码通过 **2,750 项后台、198 项前端、62 项桌面及 17 项构建测试，共 3,027 项，0 失败**。两平台新包通过独立内容审计，Windows 隔离原生启动、长任务参数预览和备份下载通过。打包接口、正式升级与付费模型运行按实际结果记入[本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md)。上一版真实 DeepSeek 批量审核的结果保留在[审核修复版记录](docs/RELEASE_20261011.md)；新包的模拟回归不能代替真实模型研究质量。
+进度与 Mac 打包修复的第一轮完整回归 **3,053 项通过**；随后加入了真实长报告暴露的复核请求无损去重补丁，合并版本正在重新验收。最终源码测试、打包接口、原生启动、正式升级和付费模型结果按实际执行写入[本轮发布记录](docs/RELEASE_RECOVERY_20261011.md)。上一版真实 DeepSeek 批量审核的结果保留在[审核修复版记录](docs/RELEASE_20261011.md)；模拟回归不能代替真实模型研究质量。
 
 ## 操作说明与项目判断
 
@@ -40,7 +40,7 @@
 | [自动审核与核验说明](docs/AUTOMATIC_REVIEW_20261011.md) | 批量审核范围、独立出处、证据不足及重试规则 |
 | [Agent 接入契约](docs/AGENT_INTEGRATION.md) / [Skill 安装](analysis-worker/app/workbench/agent_assets/INSTALL.md) | 本机接口、授权边界及安装步骤 |
 | [项目基础审查](docs/FOUNDATION_REVIEW_20261011.md) / [第一批实现](docs/FOUNDATION_IMPLEMENTATION_20261011.md) / [路线图](docs/ROADMAP.md) | 基线判断、已实施改进与后续优先级 |
-| [本轮发布记录](docs/RELEASE_FOUNDATION_20261011.md) / [审核修复版记录](docs/RELEASE_20261011.md) / [桌面构建](desktop/BUILDING.md) | 冻结文件、验收、哈希和平台限制 |
+| [本轮发布记录](docs/RELEASE_RECOVERY_20261011.md) / [来源复用版记录](docs/RELEASE_FOUNDATION_20261011.md) / [审核修复版记录](docs/RELEASE_20261011.md) / [桌面构建](desktop/BUILDING.md) | 冻结文件、验收、哈希和平台限制 |
 
 公开账号候选不等于已核验主体，关注、共同链接或模型推断不等于组织隶属；证据不足会保留未知。资料中的地名提及和发布日期不能代替实际活动地点或活动日期。任务完成状态只适用于本次范围，不保证完整平台历史、全部公开关系或持续可访问。
 

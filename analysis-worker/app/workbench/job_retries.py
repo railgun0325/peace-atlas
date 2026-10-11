@@ -21,7 +21,7 @@ class RetryConflict(ValueError):
     """A continuation already owns this retry branch."""
 
 
-def report_resume_checkpoint(params, parent, get_job):
+def report_resume_checkpoint(params, parent, get_job, *, frozen_input=None):
     """Recover absent legacy stage records only along the same report branch.
 
     Preserve the immediate parent's reading/draft progress and never replace a
@@ -35,12 +35,15 @@ def report_resume_checkpoint(params, parent, get_job):
     if not isinstance(state, dict):
         return state
     state = copy.deepcopy(state)
+    from .report_inputs import report_checkpoint_for_input
+    def selected(candidate):
+        return report_checkpoint_for_input(candidate, params, parent, frozen_input)
     metadata = params.get(RETRY_METADATA) or {}
     if not isinstance(metadata, dict):
-        return state
+        return selected(state)
     root_id = metadata.get("root_job_id")
     if metadata.get("parent_job_id") != parent.get("id") or not isinstance(root_id, str):
-        return state
+        return selected(state)
     operational = {RETRY_METADATA, "_report_input_ref", "_report_input_mode",
                    "time_budget_seconds", "harness_max_model_calls", "harness_max_tool_calls"}
     def scope(value):
@@ -59,6 +62,7 @@ def report_resume_checkpoint(params, parent, get_job):
         saved_result = current.get("result") or {}
         saved = saved_result.get("report_checkpoint") if isinstance(saved_result, dict) else None
         if isinstance(saved, dict):
+            saved = report_checkpoint_for_input(saved, params, current, frozen_input)
             for field in fields:
                 if field not in state and isinstance(saved.get(field), dict):
                     state[field] = copy.deepcopy(saved[field])
@@ -73,7 +77,7 @@ def report_resume_checkpoint(params, parent, get_job):
         current = get_job(next_id)
         if not isinstance(current, dict):
             break
-    return state
+    return selected(state)
 
 
 def retry_parent_links(jobs, batch_links=(), events=(), research_jobs=(), *, check=None):
@@ -356,7 +360,9 @@ class JobRetries:
                     # Preserve it even if this child is cancelled before its
                     # first reading callback. Every stage still checks its own
                     # exact input; copying a candidate is not cache acceptance.
-                    job["result"]["report_checkpoint"] = copy.deepcopy(previous_checkpoint)
+                    from .report_inputs import report_checkpoint_for_input
+                    job["result"]["report_checkpoint"] = report_checkpoint_for_input(
+                        copy.deepcopy(previous_checkpoint), params, latest, selected_input)
                 from .store import _json
                 self._execute(connection, "UPDATE wb_jobs SET result=? WHERE id=?", (_json(job["result"]), job["id"]))
             if latest["kind"] == "research" and params.get("resume_run_id"):

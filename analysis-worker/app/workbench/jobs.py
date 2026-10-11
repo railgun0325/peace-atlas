@@ -463,7 +463,8 @@ class JobRunner:
             parent_id = (params.get("_workbench_retry") or {}).get("parent_job_id")
             parent = self.store.get_job(parent_id) if parent_id else None
             from .job_retries import report_resume_checkpoint
-            previous_review = report_resume_checkpoint(params, parent, self.store.get_job)
+            previous_review = report_resume_checkpoint(params, parent, self.store.get_job,
+                frozen_input=frozen_input)
             async def checkpoint_input(value):
                 input_state["value"] = copy.deepcopy(value)
                 prior = self.store.get_job(jid).get("result") or {}

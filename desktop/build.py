@@ -39,7 +39,8 @@ PYTHON_RELEASE = "20261003"
 PLAYWRIGHT_VERSION = "1.59.0"
 CHROMIUM_REVISION = "1217"
 CHROMIUM_VERSION = "147.0.7727.15"
-ARTIFACT_SUFFIX = "-foundation-reuse-20261011"
+ARTIFACT_SUFFIX = "-foundation-recovery-20261011"
+MAC_MAIN_EXECUTABLE = "PEACE ATLAS"
 CHROMIUM_TARGETS = {
     "windows-x64": "win64", "macos-arm64": "mac-arm64", "macos-x64": "mac-x64",
 }
@@ -96,6 +97,10 @@ if [ ! -d "$APP/Contents" ]; then echo "App bundle missing: $APP" >&2; false; fi
 APP="$(cd "$APP" && pwd -P)"
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Contents/Info.plist")
 if [ "$BUNDLE_ID" != org.peaceatlas.workbench ]; then echo 'Unexpected app identity; stopped.' >&2; false; fi
+MAIN_EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP/Contents/Info.plist")
+if [ "$MAIN_EXECUTABLE" != "PEACE ATLAS" ] || [ ! -x "$APP/Contents/MacOS/$MAIN_EXECUTABLE" ] || [ -e "$APP/Contents/MacOS/Electron" ]; then
+  echo 'Unexpected or missing main executable; stopped.' >&2; false
+fi
 AUDIT=$(mktemp -d "${TMPDIR:-/tmp}/peace-atlas-sign.XXXXXX")
 LOG="$AUDIT/codesign.log"
 echo "Signing PEACE ATLAS locally. Audit: $AUDIT"
@@ -122,7 +127,7 @@ echo 'Ad-hoc integrity signature verified. This is not Developer ID notarization
 if [ "$SMOKE" -eq 1 ]; then
   SMOKE_DIR="$AUDIT/smoke"
   mkdir -p "$SMOKE_DIR"
-  WORKBENCH_SMOKE_EXIT=1 WORKBENCH_DATA_DIR="$SMOKE_DIR" "$APP/Contents/MacOS/Electron"
+  WORKBENCH_SMOKE_EXIT=1 WORKBENCH_DATA_DIR="$SMOKE_DIR" "$APP/Contents/MacOS/$MAIN_EXECUTABLE"
   "$APP/Contents/Resources/python/bin/python3" -I -B -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["health"]["ok"] is True; print("Native backend and desktop smoke passed")' "$SMOKE_DIR/desktop-smoke.json"
   test -s "$SMOKE_DIR/desktop-smoke.png"
   "$APP/Contents/Resources/python/bin/python3" -I -B "$APP/Contents/Resources/backend/browser_smoke.py" --browsers-path "$APP/Contents/Resources/browsers" --output "$SMOKE_DIR/browser-smoke.json"
@@ -525,11 +530,16 @@ def append_electron(archive, runtime, target, prefix):
                 name = prefix + name.removeprefix("Electron.app/")
                 if name.startswith(prefix + "Contents/_CodeSignature/"):
                     continue
+                if name == prefix + "Contents/MacOS/Electron":
+                    # Electron's macOS app.isPackaged checks the executable's
+                    # basename. Rebrand the actual main binary with its plist,
+                    # preserving its original Unix executable metadata.
+                    name = prefix + "Contents/MacOS/" + MAC_MAIN_EXECUTABLE
                 if name == prefix + "Contents/Info.plist":
                     plist = plistlib.loads(source.read(entry))
                     plist.update(CFBundleDisplayName="PEACE ATLAS · 反戦研究室", CFBundleName="PEACE ATLAS",
                                  CFBundleIdentifier="org.peaceatlas.workbench", CFBundleShortVersionString=VERSION,
-                                 CFBundleVersion=VERSION)
+                                 CFBundleVersion=VERSION, CFBundleExecutable=MAC_MAIN_EXECUTABLE)
                     if (DESKTOP / "assets/icon.icns").is_file():
                         plist["CFBundleIconFile"] = "peace-atlas.icns"
                     archive.add(name, plistlib.dumps(plist), source_info=entry)
@@ -726,7 +736,8 @@ def validate_archive(path, target, resource_prefix):
         bad = archive.testzip()
         if bad:
             raise RuntimeError(f"ZIP integrity failure: {bad}")
-        names = set(archive.namelist())
+        members = archive.namelist()
+        names = set(members)
         expected = [resource_prefix + "backend/backend_entry.py", resource_prefix + "app/main.cjs", resource_prefix + "app/preload.cjs",
                     resource_prefix + "harness/sidecar.mjs", resource_prefix + "harness/runtime-manifest.json",
                     resource_prefix + "backend/app/workbench/server.py", resource_prefix + "backend/app/static/workbench/index.html"]
@@ -743,16 +754,24 @@ def validate_archive(path, target, resource_prefix):
         if chromium["revision"] != CHROMIUM_REVISION or chromium["browserVersion"] != CHROMIUM_VERSION:
             raise RuntimeError("Packaged Playwright/browser versions disagree")
         if target.startswith("macos"):
-            expected.append("PEACE ATLAS.app/Contents/MacOS/Electron")
+            main_executable = "PEACE ATLAS.app/Contents/MacOS/" + MAC_MAIN_EXECUTABLE
+            main_plist = "PEACE ATLAS.app/Contents/Info.plist"
+            if members.count(main_plist) != 1 or members.count(main_executable) != 1:
+                raise RuntimeError("macOS main executable or plist missing or duplicated")
+            plist = plistlib.loads(archive.read(main_plist))
+            if plist.get("CFBundleExecutable") != MAC_MAIN_EXECUTABLE or "PEACE ATLAS.app/Contents/MacOS/Electron" in names:
+                raise RuntimeError("macOS main executable and bundle metadata disagree")
+            if not stat.S_ISREG(archive.getinfo(main_executable).external_attr >> 16):
+                raise RuntimeError("macOS main executable must be a regular file")
+            expected.append(main_executable)
             expected.append(resource_prefix + "python/bin/python3")
-            plist = plistlib.loads(archive.read("PEACE ATLAS.app/Contents/Info.plist"))
             minimum_macos = plist.get("LSMinimumSystemVersion")
             chromium_plist = resource_prefix + f"browsers/chromium-{CHROMIUM_REVISION}/chrome-{browser_platform}/Google Chrome for Testing.app/Contents/Info.plist"
             browser_minimum = plistlib.loads(archive.read(chromium_plist)).get("LSMinimumSystemVersion", "0")
             version_tuple = lambda value: tuple(map(int, value.split(".")))
             if version_tuple(minimum_macos) < version_tuple(browser_minimum):
                 raise RuntimeError("Browser minimum macOS is higher than the application's declared minimum")
-            for executable_name in ("PEACE ATLAS.app/Contents/MacOS/Electron", resource_prefix + "python/bin/python3.12",
+            for executable_name in (main_executable, resource_prefix + "python/bin/python3.12",
                                     resource_prefix + site + "playwright/driver/node",
                                     resource_prefix + f"browsers/chromium-{CHROMIUM_REVISION}/" + browser_executable):
                 if not ((archive.getinfo(executable_name).external_attr >> 16) & stat.S_IXUSR):
@@ -771,6 +790,7 @@ def validate_archive(path, target, resource_prefix):
             "application_manifest_hashes": "passed",
             "application_manifest_completeness": "passed", "application_file_count": application_count,
             "macos_symlinks_and_modes": "passed" if target.startswith("macos") else "not_applicable",
+            "macos_main_executable": MAC_MAIN_EXECUTABLE if target.startswith("macos") else None,
             "minimum_macos": minimum_macos, "native_runtime_test": "not_run"}
 
 

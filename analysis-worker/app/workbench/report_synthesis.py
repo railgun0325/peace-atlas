@@ -52,6 +52,60 @@ def _fingerprint(value):
         separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+def _review_wire_data(supplied):
+    """Send an exactly duplicated level-1 source/reading once, by unit reference.
+
+    Logical records, saved notes and their fingerprints remain unchanged. The
+    original pair stays in evidence_units in full; only this request's wire
+    copy uses the explicit source_and_reading_from_evidence_unit reference.
+    Higher-level notes and ambiguous or unequal records are never projected.
+    """
+    if (not isinstance(supplied, dict) or supplied.get("compression_review") is not True
+            or type(supplied.get("compression_level")) is not int
+            or supplied["compression_level"] != 1
+            or not isinstance(supplied.get("records"), list)
+            or not isinstance(supplied.get("evidence_units"), list)):
+        return supplied
+    units, ambiguous = {}, set()
+    for unit in supplied["evidence_units"]:
+        if not isinstance(unit, dict):
+            continue
+        identity = unit.get("unit_id")
+        if not isinstance(identity, str) or not identity:
+            continue
+        if identity in units:
+            ambiguous.add(identity)
+        units[identity] = unit
+    eligible = []
+    for index, record in enumerate(supplied["records"]):
+        if (not isinstance(record, dict) or set(record) != {"represented_citation_ids",
+                "represented_unit_ids", "source", "reading"}
+                or not isinstance(record["represented_unit_ids"], list)
+                or len(record["represented_unit_ids"]) != 1):
+            continue
+        identity = record["represented_unit_ids"][0]
+        if not isinstance(identity, str) or identity in ambiguous or identity not in units:
+            continue
+        unit = units[identity]
+        if (not isinstance(unit.get("citation_id"), str)
+                or record["represented_citation_ids"] != [unit["citation_id"]]
+                or any(not isinstance(row.get(field), dict) for row in (record, unit)
+                    for field in ("source", "reading"))
+                or any(_fingerprint(record[field]) != _fingerprint(unit[field])
+                    for field in ("source", "reading"))):
+            continue
+        eligible.append((index, identity))
+    if not eligible:
+        return supplied
+    result = copy.deepcopy(supplied)
+    for index, identity in eligible:
+        record = result["records"][index]
+        record.pop("source")
+        record.pop("reading")
+        record["source_and_reading_from_evidence_unit"] = identity
+    return result
+
+
 def _syntax_response_envelope(value):
     """Recheck exact final text before a checkpoint can send it again.
 
@@ -446,6 +500,8 @@ async def fit_report_input(data, system, *, max_output_tokens=32768, capacity=No
                     feedback.update(previous_response_available=True, final_response=copy.deepcopy(envelope))
                 wire_prompt = prompt + _JSON_FORMAT_REPAIR_SUFFIX
                 wire_supplied = {**copy.deepcopy(supplied), "json_format_repair": feedback}
+            if task == "review":
+                wire_supplied = _review_wire_data(wire_supplied)
             remaining = deadline - time.monotonic() if deadline else 600
             if remaining <= 0:
                 await save()

@@ -30,7 +30,7 @@ def test_saved_note_review_fits_actual_wire_by_adjusting_output_reserve(monkeypa
     calls = []
     async def model(system, supplied, **options):
         calls.append(copy.deepcopy(supplied))
-        return compressed_note(supplied, statement='x' * 27000 if len(calls) == 1 else 'Supported saved observations.')
+        return compressed_note(supplied, statement='x' * 60000 if len(calls) == 1 else 'Supported saved observations.')
     monkeypatch.setattr(synthesis, 'configured_ai_json', model)
     fitted, receipt, state = asyncio.run(synthesis.fit_report_input(data, SYSTEM,
         max_output_tokens=OUTPUT, capacity=CAPACITY))
@@ -41,7 +41,7 @@ def test_saved_note_review_fits_actual_wire_by_adjusting_output_reserve(monkeypa
     assert adjusted and all(a['input_capacity']['fits'] and a['complete'] for a in reviews)
     assert all(a['requested_max_tokens'] < a['requested_output_before_capacity_fit'] for a in adjusted)
     assert all(row['phase'] == 'reviewed' for row in state['batches'].values())
-    assert next(iter(state['batches'].values()))['note']['findings'][0]['statement'] == 'x' * 27000
+    assert next(iter(state['batches'].values()))['note']['findings'][0]['statement'] == 'x' * 60000
     assert len({unit for row in state['batches'].values() for unit in row['represented_unit_ids']}) == 40
     assert fitted['candidate_report'] == data['candidate_report']
 
@@ -70,8 +70,9 @@ def test_resumed_expanded_review_reserve_does_not_repeat_saved_compression(monke
     assert current['note'] == note and current['note_sha256'] == digest
     assert current['review_attempts'][-2]['error'] == 'cancelled'
     latest = current['review_attempts'][-1]
-    assert latest['output_reduced_for_wire_capacity'] and latest['input_capacity']['fits'] and latest['complete']
-    assert latest['requested_output_before_capacity_fit'] == 65536
+    assert latest['input_capacity']['fits'] and latest['complete']
+    assert latest['requested_max_tokens'] == 65536
+    assert not latest.get('output_reduced_for_wire_capacity')
     assert receipt['omitted_source_count'] == 0
 
 

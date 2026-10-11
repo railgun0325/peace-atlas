@@ -142,6 +142,28 @@ def reading_reuse(current, checkpoint):
             "unit": "fragments", "validation": "exact_fingerprint_and_exact_quote", "paid_verified": False}
 
 
+def report_checkpoint_for_input(state, params, parent, frozen_input):
+    """Do not project invalidated stage candidates as this child's active work."""
+    if not isinstance(state, dict):
+        return state
+    previous_params = parent.get("params", {}) if isinstance(parent, dict) else {}
+    plan_changed = params.get("analysis_harness", "off") != previous_params.get("analysis_harness", "off")
+    unchanged = True
+    if frozen_input is not None or params.get("_report_input_mode") == "latest":
+        try:
+            original = validate_report_input_snapshot(saved_input(parent), params)
+            current = validate_report_input_snapshot(frozen_input, params)
+            unchanged = original["input_fingerprint"] == current["input_fingerprint"]
+        except ValueError:
+            unchanged = False
+    if unchanged and not plan_changed:
+        return state
+    selected = copy.deepcopy(state)
+    for field in ("harness_state", "synthesis_state", "report_generation", "progress"):
+        selected.pop(field, None)
+    return selected
+
+
 def retry_preview(store, requested, latest):
     preview = {"job_id": requested["id"], "latest_job_id": latest["id"], "kind": latest["kind"],
                "status": latest["status"], "saved_params": copy.deepcopy(latest["params"])}
