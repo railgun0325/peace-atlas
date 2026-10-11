@@ -299,7 +299,7 @@ def test_review_503_retry_reuses_checkpointed_draft_without_regeneration_or_read
     async def forbidden_read(*args, **options):
         raise AssertionError('Already completed reading must not be repeated by draft recovery')
     monkeypatch.setattr(reports, 'read_sources', forbidden_read)
-    first = install_model([('generation', VALID), ('review', 503)])
+    first = install_model([('generation', VALID)] + [('review', 503)] * 3)
     checkpoints = []
     value = case()
     with pytest.raises(PipelineError, match='503'):
@@ -311,7 +311,7 @@ def test_review_503_retry_reuses_checkpointed_draft_without_regeneration_or_read
     result = run(value, previous=held, checkpoints=checkpoints)
     assert result['state']['complete'] and result['markdown'] == VALID
     assert len(result['state']['attempts']) == 1
-    assert [row['mode'] for row in first.calls] == ['generation', 'review']
+    assert [row['mode'] for row in first.calls] == ['generation', 'review', 'review', 'review']
     assert [row['mode'] for row in retry.calls] == ['review']
     assert held['phase'] == 'review_pending' and not held['complete']
 
@@ -584,8 +584,11 @@ def test_cancellation_during_source_review_keeps_draft_for_review_only_resume(in
 def assert_review_capacity_receipts(state, calls):
     reviews = [call for call in calls if call['mode'] == 'review']
     attempts = state['attempts'][-1]['source_review_attempts']
-    assert len(attempts) == len(reviews)
-    for attempt, call in zip(attempts, reviews):
+    # One logical source review can reserve several identical HTTP sends.
+    physical_attempts = [attempt for attempt in attempts
+        for _ in (attempt.get('transport_attempts') or [{}])]
+    assert len(physical_attempts) == len(reviews)
+    for attempt, call in zip(physical_attempts, reviews):
         requested = call['payload']['max_tokens']
         capacity = configured_model_capacity(model=call['payload']['model'])
         actual = assess_messages(call['payload']['messages'], max_output_tokens=requested, capacity=capacity)
@@ -647,11 +650,12 @@ def test_three_length_exhausted_reviews_hold_draft_and_resume_without_regenerati
     (review_issue(identities=['S999']), '复核字段或引用'),
 ], ids=['http_503', 'schema', 'unknown_citation'])
 def test_length_retry_does_not_swallow_service_schema_or_unknown_citation_failure(install_model, failure, match):
-    model = install_model([('generation', VALID), ('review', ended_completion()), ('review', failure)])
+    failures = [('review', failure)] * (3 if failure == 503 else 1)
+    model = install_model([('generation', VALID), ('review', ended_completion())] + failures)
     checkpoints = []
     with pytest.raises(PipelineError, match=match):
         run(case(), checkpoints=checkpoints)
-    assert len(model.calls) == 3 and not model.steps
+    assert len(model.calls) == (5 if failure == 503 else 3) and not model.steps
     held = checkpoints[-1]
     assert held['draft'] == VALID and held['phase'] == 'review_pending' and not held['complete']
     assert len(held['attempts']) == 1 and not held['attempts'][0]['accepted']
@@ -768,7 +772,7 @@ def test_compression_finding_non_string_kind_is_controlled_pipeline_error(kind):
 
 def test_draft_held_only_by_old_deterministic_gate_is_rechecked_and_reviewed_without_generation(install_model):
     value = case()
-    install_model([('generation', VALID), ('review', 503)])
+    install_model([('generation', VALID)] + [('review', 503)] * 3)
     checkpoints = []
     with pytest.raises(PipelineError, match='503'):
         run(value, checkpoints=checkpoints)
@@ -869,12 +873,12 @@ def test_changed_review_prompt_failed_service_holds_draft_without_claiming_old_a
     previous = run(value)['state']
     unchanged = copy.deepcopy(previous)
     monkeypatch.setattr(generation, '_REVIEW_PROMPT', generation._REVIEW_PROMPT + ' 新策略：逐条检查地点与扫描字段。')
-    model = install_model([('review', 503)])
+    model = install_model([('review', 503)] * 3)
     checkpoints = []
     with pytest.raises(PipelineError, match='503'):
         run(value, previous=previous, checkpoints=checkpoints)
     held = checkpoints[-1]
-    assert [call['mode'] for call in model.calls] == ['review']
+    assert [call['mode'] for call in model.calls] == ['review', 'review', 'review']
     assert held['phase'] == 'review_pending' and not held['complete'] and held['draft'] == VALID
     assert held['review_policy_fingerprint'] != previous['review_policy_fingerprint']
     assert not held['attempts'][-1]['accepted']
@@ -1035,14 +1039,14 @@ def test_reserved_machine_slot_fake_statistics_unknown_citations_and_url_are_not
 def test_machine_slot_review_503_and_completed_cache_preserve_original_audit_without_regeneration(install_model):
     value = case()
     raw, _ = machine_draft()
-    model = install_model([('generation', raw), ('review', 503)])
+    model = install_model([('generation', raw)] + [('review', 503)] * 3)
     checkpoints = []
     with pytest.raises(PipelineError, match='503'):
         run(value, checkpoints=checkpoints)
     held = copy.deepcopy(checkpoints[-1])
     assert held['phase'] == 'review_pending' and not held['complete']
     assert_machine_audit_preserves_raw_ranges(held, raw)
-    assert [call['mode'] for call in model.calls] == ['generation', 'review']
+    assert [call['mode'] for call in model.calls] == ['generation', 'review', 'review', 'review']
     original_audit = copy.deepcopy(held['machine_section_audit'])
     retry = install_model([('review', ACCEPT)])
     result = run(value, previous=held)

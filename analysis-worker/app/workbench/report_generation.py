@@ -466,9 +466,19 @@ async def generate_checked_report(payload, data, items, research_context=None, *
                     "input_capacity": copy.deepcopy(review_receipt["final_capacity"]), "complete": False}
                 latest.setdefault("source_review_attempts", []).append(attempt)
                 await save()
+                async def persist_transport(kind, value):
+                    if kind == "attempt":
+                        attempt.setdefault("transport_attempts", []).append({**value, "complete": False})
+                        attempt["transport_count_boundary"] = "Requests reserved before POST; delivery and provider billing may be uncertain."
+                    elif kind == "failure":
+                        attempt["transport_attempts"][-1]["failure_diagnostic"] = copy.deepcopy(value)
+                    elif kind == "complete":
+                        attempt["transport_attempts"][-1]["complete"] = True
+                    await save()
                 try:
                     result = await configured_ai_json(_REVIEW_PROMPT, reviewed, max_tokens=review_output,
-                        reasoning_effort="high", timeout_limit=request_timeout(), max_input_chars=None)
+                        reasoning_effort="high", timeout_limit=request_timeout(), max_input_chars=None,
+                        transport_retry=True, transport_event=persist_transport)
                 except PipelineError as error:
                     diagnostic = getattr(error, "ai_diagnostic", {})
                     attempt["failure_diagnostic"] = copy.deepcopy(diagnostic)

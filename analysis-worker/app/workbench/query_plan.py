@@ -8,10 +8,12 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
+import inspect
 import json
 import math
 import os
 import re
+import time
 import unicodedata
 from datetime import date, timedelta
 from typing import Any
@@ -293,15 +295,114 @@ def build_query_plan(params: dict[str, Any] | str, **changes) -> dict[str, Any]:
             "ai": {"requested": False, "used": False, "outcome": "not_requested"}}
 
 
+def _json_transport_diagnostic(response, code, attempt, maximum, *, retryable):
+    """Fixed wire classifications only; no response, URL or exception text."""
+    raw = response.content if isinstance(response, httpx.Response) else None
+    return {"version": 1, "code": code, "attempt": attempt, "max_attempts": maximum,
+        "http_status": response.status_code if isinstance(response, httpx.Response) else None,
+        "body_bytes": len(raw) if raw is not None else None,
+        "body_sha256": hashlib.sha256(raw).hexdigest() if raw is not None else None,
+        "body_retained": False, "retryable": retryable}
+
+
+async def _configured_json_request(endpoint, key, payload, seconds, *, transport_retry, transport_event):
+    # Match the already accepted Harness transport policy. Parsed schema and
+    # inner JSON/semantic validation stay outside the retryable wire boundary.
+    maximum = 3 if transport_retry else 1
+    transient_statuses = {408, 429, 500, 502, 503, 504}
+    deadline = time.monotonic() + seconds
+    attempt, response, deadline_exhausted = 0, None, False
+
+    async def notify(kind, value):
+        if transport_event is not None:
+            saved = transport_event(kind, copy.deepcopy(value))
+            if inspect.isawaitable(saved):
+                await saved
+
+    def failure(detail):
+        code, status = detail["code"], detail["http_status"]
+        message = ("AI 请求超时；本次未使用 AI 结果。" if code == "timeout" else
+            f"现有 DeepSeek 连接返回 HTTP {status}；本次未使用 AI 结果。" if code == "http_status" else
+            "AI 响应格式无效或请求失败；本次未使用 AI 结果。")
+        error = PipelineError(message)
+        error.ai_transport_diagnostic = detail
+        error.ai_diagnostic = {"failure_kind": "timeout" if code == "timeout" else
+            "http_status" if code == "http_status" else "invalid_response" if code in {"empty_body", "invalid_json", "outer_shape"} else "transport",
+            "requested_max_tokens": payload["max_tokens"], "transport_code": code,
+            "transport_attempt": detail["attempt"], "max_transport_attempts": maximum}
+        if status is not None:
+            error.ai_diagnostic["http_status"] = status
+        return error
+
+    try:
+        async with asyncio.timeout(seconds) as transport_clock:
+            for attempt in range(1, maximum + 1):
+                response = None
+                await notify("attempt", {"attempt": attempt, "max_attempts": maximum, "request_reserved": True})
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    deadline_exhausted = True
+                    raise asyncio.TimeoutError()
+                try:
+                    async with httpx.AsyncClient(timeout=httpx.Timeout(remaining, connect=min(remaining, 15))) as client:
+                        response = await client.post(endpoint, headers={"Authorization": f"Bearer {key}"}, json=payload)
+                        response.raise_for_status()
+                        body = response.json()
+                except httpx.HTTPStatusError:
+                    code, retryable = "http_status", response.status_code in transient_statuses
+                except httpx.TimeoutException:
+                    code, retryable = "timeout", False
+                except (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError, httpx.DecodingError) as error:
+                    code = ("connect_error" if isinstance(error, httpx.ConnectError) else
+                        "read_error" if isinstance(error, httpx.ReadError) else "write_error" if isinstance(error, httpx.WriteError) else
+                        "remote_protocol" if isinstance(error, httpx.RemoteProtocolError) else "decoding_error")
+                    retryable = True
+                except httpx.HTTPError:
+                    code, retryable = "other_http_error", False
+                except (ValueError, RecursionError):
+                    code = "empty_body" if response is not None and not response.content.strip() else "invalid_json"
+                    retryable = response is not None
+                else:
+                    # A syntactically valid envelope with a wrong schema is
+                    # not a transient parse failure and must never be replayed.
+                    try:
+                        choice = body["choices"][0]
+                        if not isinstance(body, dict) or not isinstance(body["choices"], list) or not isinstance(choice, dict):
+                            raise TypeError()
+                        if choice.get("finish_reason") is not None and not isinstance(choice.get("finish_reason"), str):
+                            raise TypeError()
+                        if choice.get("finish_reason") == "stop" and not isinstance(choice["message"]["content"], str):
+                            raise TypeError()
+                    except (KeyError, IndexError, TypeError):
+                        detail = _json_transport_diagnostic(response, "outer_shape", attempt, maximum, retryable=False)
+                        await notify("failure", detail)
+                        raise failure(detail) from None
+                    await notify("complete", {"attempt": attempt, "max_attempts": maximum})
+                    return body, choice
+                detail = _json_transport_diagnostic(response, code, attempt, maximum, retryable=retryable and transport_retry)
+                await notify("failure", detail)
+                if not detail["retryable"] or attempt == maximum:
+                    raise failure(detail) from None
+                await asyncio.sleep(0.5 * attempt)
+    except asyncio.TimeoutError:
+        if not transport_clock.expired() and not deadline_exhausted:
+            raise  # A checkpoint exception is not a transport failure.
+        detail = _json_transport_diagnostic(response, "timeout", max(1, attempt), maximum, retryable=False)
+        await notify("failure", detail)
+        raise failure(detail) from None
+
+
 async def configured_ai_json(system: str, data: dict, *, max_tokens: int = 1800, timeout_limit: float = 600,
-                             reasoning_effort: str = "low", max_input_chars: int | None = None) -> Any:
+                             reasoning_effort: str = "low", max_input_chars: int | None = None,
+                             transport_retry: bool = False, transport_event=None) -> Any:
     """Use the existing DeepSeek connection; strict JSON and no secret diagnostics."""
     key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if not key:
         raise PipelineError("未配置现有 DeepSeek 连接；本次 AI 建议未执行。")
     base = _url(os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")).rstrip("/")
     endpoint = base if base.endswith("/chat/completions") else base + "/chat/completions"
-    if (reasoning_effort not in {"low", "high", "max"}
+    if (type(transport_retry) is not bool or transport_event is not None and not callable(transport_event)
+            or reasoning_effort not in {"low", "high", "max"}
             or (max_input_chars is not None and (isinstance(max_input_chars, bool)
                 or not isinstance(max_input_chars, int) or max_input_chars < 1))
             or isinstance(timeout_limit, bool) or not isinstance(timeout_limit, (int, float))
@@ -334,45 +435,34 @@ async def configured_ai_json(system: str, data: dict, *, max_tokens: int = 1800,
         seconds = min(timeout_limit, configured)
     except (ValueError, OverflowError):
         seconds = timeout_limit
+    body, choice = await _configured_json_request(endpoint, key, payload, seconds,
+        transport_retry=transport_retry, transport_event=transport_event)
+    if choice.get("finish_reason") != "stop":
+        error = PipelineError("AI 输出未完整结束；未采用截断内容。")
+        finish = choice.get("finish_reason")
+        error.ai_diagnostic = {"finish_reason": finish if finish in {"length", "content_filter", "tool_calls", "function_call", "insufficient_system_resource"} else "other",
+                               "requested_max_tokens": max_tokens, "reasoning_effort": reasoning_effort}
+        tokens = (body.get("usage") or {}).get("completion_tokens") if isinstance(body.get("usage") or {}, dict) else None
+        if isinstance(tokens, int) and not isinstance(tokens, bool) and 0 <= tokens <= 393216:
+            error.ai_diagnostic["completion_tokens"] = tokens
+        raise error
+    content = choice["message"]["content"]
+    invalid = False
     try:
-        async with asyncio.timeout(seconds):
-            async with httpx.AsyncClient(timeout=httpx.Timeout(seconds, connect=min(seconds, 15))) as client:
-                response = await client.post(endpoint, headers={"Authorization": f"Bearer {key}"}, json=payload)
-                response.raise_for_status()
-                body = response.json()
-                choice = body["choices"][0]
-                if choice.get("finish_reason") != "stop":
-                    error = PipelineError("AI 输出未完整结束；未采用截断内容。")
-                    finish = choice.get("finish_reason")
-                    error.ai_diagnostic = {"finish_reason": finish if finish in {"length", "content_filter", "tool_calls", "function_call", "insufficient_system_resource"} else "other",
-                                           "requested_max_tokens": max_tokens, "reasoning_effort": reasoning_effort}
-                    tokens = (body.get("usage") or {}).get("completion_tokens")
-                    if isinstance(tokens, int) and not isinstance(tokens, bool) and 0 <= tokens <= 393216:
-                        error.ai_diagnostic["completion_tokens"] = tokens
-                    raise error
-                content = choice["message"]["content"]
-                if not isinstance(content, str):
-                    raise TypeError()
-                invalid = False
-                try:
-                    parsed = strict_ai_json_loads(content)
-                except (ValueError, UnicodeError, RecursionError):
-                    invalid = True
-                if invalid:
-                    # Raise outside the parser exception context: its doc field
-                    # must not carry unfiltered content into diagnostics.
-                    raise AIJSONSyntaxError(content, secret_values=(key,)) from None
-                if _sensitive_final_value(parsed, (key,)):
-                    raise AIJSONFinalResponseError(content, secret_values=(key,)) from None
-                return parsed
-    except asyncio.TimeoutError:
-        raise PipelineError("AI 请求超时；本次未使用 AI 结果。") from None
-    except PipelineError:
-        raise
-    except httpx.HTTPStatusError as exc:
-        raise PipelineError(f"现有 DeepSeek 连接返回 HTTP {exc.response.status_code}；本次未使用 AI 结果。") from None
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
-        raise PipelineError("AI 响应格式无效或请求失败；本次未使用 AI 结果。") from None
+        parsed = strict_ai_json_loads(content)
+    except (ValueError, UnicodeError, RecursionError):
+        invalid = True
+    if invalid:
+        # Raise outside the parser exception context: its doc field must not
+        # carry unfiltered content into transport diagnostics.
+        error = AIJSONSyntaxError(content, secret_values=(key,))
+        error.ai_diagnostic = {"failure_kind": "invalid_response", "response_stage": "content_syntax", "requested_max_tokens": max_tokens}
+        raise error from None
+    if _sensitive_final_value(parsed, (key,)):
+        error = AIJSONFinalResponseError(content, secret_values=(key,))
+        error.ai_diagnostic = {"failure_kind": "invalid_response", "response_stage": "sensitive_final_value", "requested_max_tokens": max_tokens}
+        raise error from None
+    return parsed
 
 
 async def suggest_keywords(params: dict[str, Any]) -> dict[str, Any]:
