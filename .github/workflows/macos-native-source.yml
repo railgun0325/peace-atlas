@@ -1,4 +1,4 @@
-name: Build and verify private macOS source
+name: Build and verify private macOS recovery source
 
 on:
   workflow_dispatch:
@@ -10,7 +10,6 @@ on:
       release_tag:
         description: Existing private draft release in this repository
         required: true
-        default: v2.0.0-foundation-reuse.20261011
         type: string
 
 # Write access is used only by the final candidate release-asset upload step.
@@ -33,7 +32,8 @@ jobs:
       SOURCE_SHA: ${{ inputs.source_sha }}
       RELEASE_TAG: ${{ inputs.release_tag }}
       EXPECTED_REPOSITORY: railgun0325/peace-atlas
-      EXPECTED_MANIFEST_SHA256: ceb5f1a974a949ab74619122e83bca443fa153004572141f385df0cb44cf863b
+      # Root must replace this placeholder with the new committed source-freeze digest.
+      EXPECTED_MANIFEST_SHA256: b4ad7ce3a924307f485e9730a7e8d1b13caf26540c97ed9ddf786d189b245adc
     steps:
       - name: Fetch the exact same-repository source commit
         env:
@@ -54,6 +54,8 @@ jobs:
           repo = os.environ['GITHUB_REPOSITORY']
           source_sha, tag = valid_inputs(repo, os.environ['EXPECTED_REPOSITORY'],
                                          os.environ['SOURCE_SHA'], os.environ['RELEASE_TAG'])
+          if not re.fullmatch(r'[a-f0-9]{64}', os.environ['EXPECTED_MANIFEST_SHA256']):
+              raise SystemExit('Recovery workflow awaits the new root-approved manifest SHA-256')
           if platform.system() != 'Darwin' or platform.machine() != 'arm64':
               raise SystemExit('Native Apple Silicon runner required')
           if sys.version_info < (3, 12):
@@ -100,12 +102,12 @@ jobs:
                       raise SystemExit('Unsafe source archive member')
               source.extractall(root / 'source', filter='data')
           checkout = root / 'source' / tops.pop()
-          manifest_path = checkout / 'docs/release-evidence/foundation-source-manifest-20261011.json'
+          manifest_path = checkout / 'docs/release-evidence/recovery-source-manifest-20261011.json'
           manifest_sha = hashlib.file_digest(manifest_path.open('rb'), 'sha256').hexdigest()
           if manifest_sha != os.environ['EXPECTED_MANIFEST_SHA256']:
               raise SystemExit('The committed foundation source manifest differs from the prepared release freeze')
           manifest = json.loads(manifest_path.read_text())
-          if manifest.get('freeze_format_version') != 2 or manifest['targets'].get('macos-arm64') != 3142:
+          if manifest.get('freeze_format_version') != 2 or not isinstance(manifest['targets'].get('macos-arm64'), int) or manifest['targets']['macos-arm64'] <= 0 or len(manifest['target_files']['macos-arm64']) != manifest['targets']['macos-arm64']:
               raise SystemExit('Unexpected foundation target manifest')
           for name, record in manifest['files'].items():
               relative = pathlib.PurePosixPath(record['source'])
@@ -132,7 +134,7 @@ jobs:
       - name: Build and verify the frozen Mac application target
         run: |
           python3 - <<'PY'
-          import hashlib, importlib.util, json, os, pathlib, subprocess, zipfile
+          import hashlib, importlib.util, json, os, pathlib, plistlib, stat, subprocess, zipfile
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
           source = pathlib.Path(os.environ['SOURCE_DIR'])
           evidence = root / 'evidence'
@@ -143,7 +145,7 @@ jobs:
               subprocess.run([str(python), '-I', '-B', str(source / 'desktop/build.py'),
                               '--target', 'macos-arm64', '--mac-signing', 'native-finalizer'],
                              cwd=source, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
-          manifest = json.loads((source / 'docs/release-evidence/foundation-source-manifest-20261011.json').read_text())
+          manifest = json.loads((source / 'docs/release-evidence/recovery-source-manifest-20261011.json').read_text())
           target = manifest['target_files']['macos-arm64']
           expected = {name: manifest['files'][name]['sha256'] for name in target}
           spec = importlib.util.spec_from_file_location('verified_desktop_builder', source / 'desktop/build.py')
@@ -151,9 +153,11 @@ jobs:
           spec.loader.exec_module(builder)
           actual_sources = builder.application_files('macos-arm64')
           actual = {name: hashlib.file_digest(path.open('rb'), 'sha256').hexdigest() for path, name in actual_sources}
-          if len(actual_sources) != len(actual) or actual != expected or len(actual) != 3142:
+          if len(actual_sources) != len(actual) or actual != expected or len(actual) != manifest['targets']['macos-arm64']:
               raise SystemExit('Mac target membership or application source hashes differ from the committed freeze')
-          results = json.loads((source / 'dist/desktop-build-results-foundation-reuse-20261011.json').read_text())
+          if builder.ARTIFACT_SUFFIX != '-foundation-recovery-20261011' or builder.MAC_MAIN_EXECUTABLE != 'PEACE ATLAS':
+              raise SystemExit('The recovery builder suffix and renamed main executable are required')
+          results = json.loads((source / 'dist' / ('desktop-build-results' + builder.ARTIFACT_SUFFIX + '.json')).read_text())
           if len(results) != 1 or results[0]['target'] != 'macos-arm64':
               raise SystemExit('Only the requested Mac target may be produced')
           result = results[0]
@@ -172,6 +176,13 @@ jobs:
                   path = pathlib.PurePosixPath(name)
                   if path.is_absolute() or '..' in path.parts:
                       raise SystemExit('Unsafe build archive path')
+              plist = plistlib.loads(bundle.read('PEACE ATLAS.app/Contents/Info.plist'))
+              main = 'PEACE ATLAS.app/Contents/MacOS/' + str(plist.get('CFBundleExecutable', ''))
+              if plist.get('CFBundleExecutable') != 'PEACE ATLAS' or main not in names or 'PEACE ATLAS.app/Contents/MacOS/Electron' in names:
+                  raise SystemExit('Raw archive main executable and plist do not implement the recovery fix')
+              mode = bundle.getinfo(main).external_attr >> 16
+              if not stat.S_ISREG(mode) or not mode & stat.S_IXUSR:
+                  raise SystemExit('Raw archive main executable lost its regular-file/executable metadata')
               packaged = json.loads(bundle.read(prefix + 'build-manifest.json'))
               packaged_hashes = {row['path']: row['sha256'] for row in packaged['application_files']}
               if len(packaged_hashes) != len(packaged['application_files']) or packaged_hashes != expected:
@@ -183,21 +194,29 @@ jobs:
           (evidence / 'raw-archive-sha256.txt').write_text(raw_sha + '\n')
           with open(os.environ['GITHUB_ENV'], 'a') as output:
               output.write('RAW_ARCHIVE=' + str(archive) + '\n')
-          print('New runner-built ZIP and all 3142 Mac application files verified before native signing')
+          print('New runner-built ZIP and all ' + str(len(expected)) + ' Mac application files verified before native signing')
           PY
 
       - name: Finalize and verify native isolated paths
         run: |
           python3 - <<'PY'
-          import hashlib, json, os, pathlib, platform, re, shutil, sqlite3, subprocess, time
+          import hashlib, json, os, pathlib, platform, plistlib, re, shutil, sqlite3, stat, subprocess, time
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'peace-atlas-native-source'
           evidence = root / 'evidence'
           stage = root / 'native-app'
           subprocess.run(['ditto', '-x', '-k', os.environ['RAW_ARCHIVE'], str(stage)], check=True, timeout=180)
           app = stage / 'PEACE ATLAS.app'
           resources = app / 'Contents/Resources'
-          executable = app / 'Contents/MacOS/Electron'
-          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/foundation-source-manifest-20261011.json').read_text())
+          def main_executable_name(info):
+              name = info.get('CFBundleExecutable')
+              if name != 'PEACE ATLAS':
+                  raise ValueError('The recovery bundle must name PEACE ATLAS as its main executable')
+              return name
+          main_name = main_executable_name(plistlib.loads((app / 'Contents/Info.plist').read_bytes()))
+          executable = app / 'Contents/MacOS' / main_name
+          if not executable.is_file() or executable.is_symlink() or not executable.stat().st_mode & stat.S_IXUSR or (app / 'Contents/MacOS/Electron').exists():
+              raise SystemExit('Extracted recovery main executable is invalid')
+          manifest = json.loads((pathlib.Path(os.environ['SOURCE_DIR']) / 'docs/release-evidence/recovery-source-manifest-20261011.json').read_text())
           expected = {name: manifest['files'][name]['sha256'] for name in manifest['target_files']['macos-arm64']}
           macho_magic = {b'\xfe\xed\xfa\xce', b'\xce\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
                          b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'}
@@ -224,7 +243,7 @@ jobs:
           env = {name: os.environ[name] for name in ('PATH', 'LANG', 'LC_ALL', 'SHELL') if name in os.environ}
           env.update(HOME=str(owned_home), TMPDIR=str(native_tmp) + '/', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1',
                      WORKBENCH_SMOKE_EXIT='1', WORKBENCH_DATA_DIR=str(post_open))
-          # The unchanged finalizer's concluding `open` also inherits this explicit smoke profile.
+          # The finalizer's concluding `open` also inherits this explicit smoke profile.
           command('native-finalizer', ['bash', str(stage / 'Finalize PEACE ATLAS.command'), '--smoke'], env=env, timeout=1200)
           audits = list(native_tmp.glob('peace-atlas-sign.*'))
           if len(audits) != 1:
@@ -299,7 +318,7 @@ jobs:
               raise SystemExit('Native derived archive must not be represented as either raw ZIP')
           assets = root / 'release-assets'
           assets.mkdir()
-          name = ('PEACE-ATLAS-2.0.0-macos-arm64-foundation-reuse-20261011-native-' + os.environ['SOURCE_SHA'][:12]
+          name = ('PEACE-ATLAS-2.0.0-macos-arm64-foundation-recovery-20261011-native-' + os.environ['SOURCE_SHA'][:12]
                   + '-run' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT'] + '.zip')
           output = assets / name
           shutil.copy2(finalized[0], output)
@@ -308,6 +327,7 @@ jobs:
           acceptance = {**source_receipt, 'ok': True, 'native_finalized_archive': name, 'native_finalized_archive_sha256': native_sha,
                         'runner_built_raw_archive_sha256': raw_sha, 'prior_windows_cross_built_sha256_reference': prior_cross_built_sha,
                         'same_archive_as_prior_cross_build': False, 'raw_signature_verified': raw_signature == 0,
+                        'macos_main_executable': main_name,
                         'native_codesign': True, 'finalizer_smoke': True, 'finalizer_post_open_isolated': True,
                         'finalized_zip_roundtrip_codesign_and_bytes': True,
                         'native_desktop_backend': True, 'native_backup_sqlite_integrity': True, 'bundled_browser': browser,
@@ -358,7 +378,7 @@ jobs:
               digest = 'sha256:' + hashlib.file_digest(path.open('rb'), 'sha256').hexdigest()
               if not asset or asset.get('size') != path.stat().st_size or asset.get('state') != 'uploaded':
                   raise SystemExit('Uploaded release asset is incomplete')
-              if asset.get('digest') and asset['digest'] != digest:
+              if asset.get('digest') != digest:
                   raise SystemExit('GitHub asset digest differs from the accepted file')
           if after.get('draft') is not True or after['id'] != accepted['draft_release_id'] or after.get('tag_name') != tag:
               raise SystemExit('Release draft changed during upload')
@@ -394,4 +414,5 @@ jobs:
             ${{ runner.temp }}/peace-atlas-native-source/evidence/finalizer-post-open-profile/logs/backend.log
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/logs/desktop.log
             ${{ runner.temp }}/peace-atlas-native-source/evidence/isolated-profile/logs/backend.log
-            ${{ runner.temp }}/peace-atlas-native-source/release-assets/*
+            ${{ runner.temp }}/peace-atlas-native-source/release-assets/*.sha256
+            ${{ runner.temp }}/peace-atlas-native-source/release-assets/*.acceptance.json
