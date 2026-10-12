@@ -17,12 +17,15 @@
     "actual_install_exit_code": 0,
     "installed_payload_hashes_matched": 8760,
     "desktop_entrypoints_verified": 3,
-    "formal_startup_verified": false,
+    "formal_startup_verified": true,
     "research_tables_unchanged_after_upgrade": 23,
-    "research_tables_unchanged_after_startup": null,
+    "research_tables_unchanged_after_startup": 23,
     "isolated_native_startup_verified": true,
     "signing": "unsigned",
-    "user_data_backup_created": true
+    "user_data_backup_created": true,
+    "formal_startup_receipt": "windows-formal-startup.json",
+    "formal_startup_receipt_sha256": "64aa1810769e270a5885d8b2485334d58e09cbfe3f3df47e7af9c7c24245fe1f",
+    "formal_startup_check_scope": "Normal installed Windows startup and exact research-table equality during the recorded interval. Later human edits or model classification are outside this startup proof."
   },
   "macos_arm64": {
     "ok": true,
