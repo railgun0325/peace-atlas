@@ -1,15 +1,122 @@
 {
-  "status": "not_run_awaiting_exported_agent_connection",
-  "application_source_commit": "be315a35e7eefad0f26c58cc9a3e20f373df642e",
-  "source_manifest_sha256": "6d77c05fbec92313736714196208a537d05cc65993f05e24eae814682502738e",
-  "new_binary_classification_model_job_created": false,
-  "reason": "Desktop control remains stopped by physical Escape; an explicitly exported Agent connection is required for interface execution.",
-  "binary_type_contract": [
-    "organization",
-    "individual"
-  ],
-  "legacy_unknown_display": "individual; original historical audit metadata retained",
-  "historical_real_classification_receipt": "fast-classification.json",
-  "historical_result_is_current_binary_acceptance": false,
+  "status": "passed",
+  "job_id": "5822a397-03b8-4a0b-8cb5-50b30b68b3be",
+  "observed_at": "2026-10-12T03:27:11.169054+00:00",
+  "network_requests_by_verifier": 0,
+  "model_calls_by_verifier": 0,
+  "database_mutations_by_verifier": 0,
+  "configuration_or_profile_file_reads": 0,
+  "installed_source_binding": {
+    "source_freeze_sha256": "33061a7ae1e52ba4fffc4335caddd6e453de145bc215521247e303e7cc671372",
+    "installation_receipt_sha256": "041199c5b7dc2975743c9bb195887a3380772e7e899f99afb06d6dbbb383fa8c",
+    "installed_classification_sources": {
+      "backend/app/workbench/query_plan.py": "d50c7120d4c84ae7b13f8a072f915e0aeffb91230e9e74859278ea2f08340f41",
+      "backend/app/workbench/fast_account_classification.py": "ba9ee5d5e5d8c88fe7bb3ad999d489770ab125ddd9e122c4477dfbc26db62745",
+      "backend/app/workbench/review.py": "d893f8cd8bc5f31d82930250572f862df19d660cfd48e050473f7d0b94bde0cb",
+      "backend/app/workbench/account_identity.py": "68fed8d32b24a2e2a7709a02937340c0a01d36c499ea4d7d32091146dd489860",
+      "backend/app/workbench/store.py": "bc079bc8c15e053c2b9d7cd52c16e96943e822cf062c421d6456e90a4ef71efd"
+    }
+  },
+  "request_count_boundary": "Persisted reserved transport attempts; not proof of provider acceptance, billed requests or actual fees",
+  "after_type_counts": {
+    "individual": 43,
+    "organization": 18
+  },
+  "trust_counts_unchanged": {
+    "candidate": 59,
+    "verified": 2
+  },
+  "account_public_fields_unchanged": true,
+  "sources_relations_research_activities_unchanged": true,
+  "account_name_handle_url_status_organization_source_metadata_unchanged": true,
+  "public_profiles_verification_sources_and_history_unchanged": true,
+  "sources_saved_relationships_and_activity_reviews_unchanged": true,
+  "automatic_identity_verification_jobs_created": 0,
+  "type_revision_and_job_result_agreement": true,
+  "exact_eligible_snapshot_and_output_ids_match": true,
+  "full_original_account_id_set_preserved": true,
+  "unprocessed_account_raw_rows_unchanged": true,
+  "all_processed_results_are_binary": true,
+  "processed_type_counts": {
+    "individual": 42,
+    "organization": 18
+  },
+  "manual_lock_proof": {
+    "baseline_count": 1,
+    "skipped_count": 1,
+    "complete_raw_rows_unchanged": true,
+    "checked_against_fresh_snapshot": true
+  },
+  "required_sample_checks": {
+    "individual_type_preserved": true,
+    "manual_locked_in_baseline": true,
+    "processed_by_this_model_job": false,
+    "manual_lock_raw_row_preserved": true
+  },
+  "actual_manual_lock_test": "Real baseline has 1 locked accounts; all excluded from the model snapshot and their complete raw rows stayed identical.",
+  "successful_provider_diagnostic": null,
+  "termination_evidence": "Succeeded through the installed strict finish_reason=stop gate; successful provider finish_reason and token counts are not separately persisted.",
+  "installed_request_configuration": {
+    "reasoning_effort": "none",
+    "profile_count": 60,
+    "requested_max_tokens": 19200,
+    "batch_size": 100,
+    "boundary": "Confirmed installed source configuration, not a separately persisted per-request wire diagnostic"
+  },
+  "interpretation": "Approximate publishing-account type only; no conclusion about individual political identity, organizational affiliation or independently verified real-world identity",
+  "job": {
+    "kind": "collect",
+    "status": "succeeded",
+    "progress": 100,
+    "created_at": "2026-10-12T03:21:35.506396Z",
+    "started_at": "2026-10-12T03:21:35.841396Z",
+    "finished_at": "2026-10-12T03:21:48.612112+00:00",
+    "elapsed_seconds": 12.770716,
+    "options": {
+      "account_ids": [],
+      "batch_size": 100,
+      "recheck": true
+    },
+    "total": 60,
+    "completed": 60,
+    "batches": 1,
+    "original_account_total": 61,
+    "manual_locked_skipped": 1,
+    "excluded_skipped": 0,
+    "reserved_model_requests": 1,
+    "transport_retries": 0,
+    "tool_calls": 0
+  },
+  "baseline_counts": {
+    "accounts": 61,
+    "eligible": 60,
+    "manual_locked": 1,
+    "excluded": 0,
+    "unprocessed": 1,
+    "type_counts": {
+      "unknown": 23,
+      "organization": 22,
+      "individual": 16
+    },
+    "trust_counts": {
+      "candidate": 59,
+      "verified": 2
+    }
+  },
+  "immutable_table_counts": {
+    "wb_account_keys": 61,
+    "wb_items": 551,
+    "wb_item_revisions": 0,
+    "wb_relations": 252,
+    "wb_research_items": 812,
+    "wb_research_nodes": 108,
+    "wb_research_edges": 337,
+    "wb_research_observations": 674,
+    "wb_research_claims": 61,
+    "wb_research_claim_observations": 223,
+    "wb_research_claim_reviews": 122,
+    "wb_research_deferred": 173,
+    "wb_research_runs": 6
+  },
   "contains_account_names_handles_urls_bios_or_model_reasons": false
 }

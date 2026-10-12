@@ -98,11 +98,53 @@
   },
   "real_binary_classification": {
     "receipt": "binary-classification.json",
-    "receipt_sha256": "aebd803140a1e5ea4237b43f39b290ae902fe24cc0c582320d4bd9cb20a15ec3",
-    "status": "not_run_awaiting_exported_agent_connection",
-    "type_counts": null,
-    "job": null,
-    "interpretation": "Approximate publishing-account type only; no inferred membership or independent identity verification"
+    "receipt_sha256": "3dbeed138c72a6dffba6bdbe977b1da95a6a402f3c3c071414428c9d267e5043",
+    "status": "passed",
+    "type_counts": {
+      "individual": 43,
+      "organization": 18
+    },
+    "processed_type_counts": {
+      "individual": 42,
+      "organization": 18
+    },
+    "job_id": "5822a397-03b8-4a0b-8cb5-50b30b68b3be",
+    "job": {
+      "kind": "collect",
+      "status": "succeeded",
+      "progress": 100,
+      "created_at": "2026-10-12T03:21:35.506396Z",
+      "started_at": "2026-10-12T03:21:35.841396Z",
+      "finished_at": "2026-10-12T03:21:48.612112+00:00",
+      "elapsed_seconds": 12.770716,
+      "options": {
+        "account_ids": [],
+        "batch_size": 100,
+        "recheck": true
+      },
+      "total": 60,
+      "completed": 60,
+      "batches": 1,
+      "original_account_total": 61,
+      "manual_locked_skipped": 1,
+      "excluded_skipped": 0,
+      "reserved_model_requests": 1,
+      "transport_retries": 0,
+      "tool_calls": 0
+    },
+    "manual_lock_proof": {
+      "baseline_count": 1,
+      "skipped_count": 1,
+      "complete_raw_rows_unchanged": true,
+      "checked_against_fresh_snapshot": true
+    },
+    "identity_statuses_unchanged": true,
+    "source_relationship_activity_research_content_unchanged": true,
+    "zero_unknown_type_after_task": true,
+    "interpretation": "Approximate publishing-account type only; no conclusion about individual political identity, organizational affiliation or independently verified real-world identity",
+    "required_sample_type_provenance": "The required individual sample was already manually locked; its complete row was preserved and it was not classified by this model job.",
+    "execution_channel": "User-exported read/review grant through the documented Agent CLI; no desktop input.",
+    "connection_secret_or_raw_account_text_published": false
   },
   "manual": {
     "sections": 20,
@@ -140,5 +182,20 @@
     "bounded_download_bytes_per_asset": 512,
     "release_url": "https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-binary-account-types.20261012",
     "full_anonymous_large_asset_download_performed": false
+  },
+  "current_review_completion": {
+    "observed_at": "2026-10-12T03:37:59.567562+00:00",
+    "pending_only_review_queue_totals": {
+      "accounts": 0,
+      "claims": 0,
+      "activities": 0
+    },
+    "verified_through_authorized_read_only_agent_cli": true,
+    "new_model_calls_for_this_queue_check": 0,
+    "historical_strict_review_job_id": "261b0349-0196-4f59-b5a0-029d29a944c7",
+    "historical_strict_review_completed": 216,
+    "historical_strict_review_total": 216,
+    "historical_strict_review_status": "succeeded",
+    "boundary": "No pending unreviewed records is not a claim that all evidence is confirmed or all identities verified. Inconclusive and rejected reviewed records retain their actual outcomes."
   }
 }
