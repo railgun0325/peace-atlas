@@ -151,7 +151,10 @@
     "parameter_tables": 27,
     "html_file": "PEACE-ATLAS-user-manual-20261012.html",
     "html_sha256": "fa443d6e963bddb8577d484788c26c0eec543f57f0bb45948d66f65126700c11",
-    "desktop_and_mobile_file_protocol_checked": true
+    "desktop_and_mobile_file_protocol_checked": true,
+    "html_attachment_published": false,
+    "current_reader_entry": "https://github.com/railgun0325/peace-atlas/blob/master/docs/USER_MANUAL_20261010_AGENT.md",
+    "historical_html_render_receipt_retained": true
   },
   "long_report_limit": {
     "original_input_records": 601,
@@ -176,12 +179,22 @@
     "published": true,
     "public_repository": true,
     "latest_release_verified": true,
-    "approved_asset_count": 12,
+    "approved_asset_count": 2,
     "all_server_asset_sizes_and_sha256_matched": true,
     "anonymous_page_access_and_bounded_installer_downloads_passed": true,
     "bounded_download_bytes_per_asset": 512,
     "release_url": "https://github.com/railgun0325/peace-atlas/releases/tag/v2.0.0-binary-account-types.20261012",
-    "full_anonymous_large_asset_download_performed": false
+    "full_anonymous_large_asset_download_performed": false,
+    "initial_approved_asset_count": 12,
+    "auxiliary_release_assets_removed": 10,
+    "release_title": "PEACE ATLAS 2.0.0",
+    "presentation_updated_at": "2026-10-12T06:27:22.871921+00:00",
+    "download_list": [
+      "Windows x64 EXE installer",
+      "Apple Silicon macOS PKG installer"
+    ],
+    "remaining_installer_bytes_unchanged": true,
+    "historical_asset_verification_retained": true
   },
   "current_review_completion": {
     "observed_at": "2026-10-12T03:37:59.567562+00:00",

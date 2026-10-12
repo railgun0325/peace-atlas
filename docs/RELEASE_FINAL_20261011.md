@@ -49,9 +49,9 @@ Mac 本轮原生构建见 [run 38166632103](https://github.com/railgun0325/peace
 | Windows x64 Setup.exe | 307,429,973 | `3218d0f972851643ecaf9fde82ab84707364019f2076759df28efba2e919c8f7` |
 | macOS Apple Silicon PKG | 377,090,650 | `d776c1c4b32219efda75697568b7010d3724e776a9d13d30d9678d63a98f3732` |
 
-[完整操作说明](USER_MANUAL_20261010_AGENT.md)保留 20 部分和参数表，补充快速分类、人工锁定、审核范围、报告恢复、安装与分享；离线 HTML 已随本轮发布，包含 20 部分、27 个参数表，桌面和手机宽度实际渲染检查通过。[Agent 接入](AGENT_INTEGRATION.md)提供支持 Codex／Claude Code／DSH 等宿主的通用 Skill 与清晰协议，授权连接仍由用户导出，安装 Skill 本身不授予数据访问。
+[完整操作说明](USER_MANUAL_20261010_AGENT.md)保留 20 部分和参数表，补充快速分类、人工锁定、审核范围、报告恢复、安装与分享；手册入口现指向仓库文档。离线 HTML 曾完成 20 部分、27 个参数表的桌面与手机宽度渲染验收，该历史记录保留，当前不再作为发布附件。[Agent 接入](AGENT_INTEGRATION.md)提供支持 Codex／Claude Code／DSH 等宿主的通用 Skill 与清晰协议，授权连接仍由用户导出，安装 Skill 本身不授予数据访问。
 
-[公开 GitHub 仓库](https://github.com/railgun0325/peace-atlas)及[最终下载入口](https://github.com/railgun0325/peace-atlas/releases/latest)可不登录访问；公开意味着没有链接的人也可能通过搜索找到，不能当作凭链接的保密分享。正式数据库、API Key、登录会话、本机 QA 与原帖材料不上传。固定发布标签为 `v2.0.0-binary-account-types.20261012`；本轮已正式发布，latest 下载入口已指向本轮版本，12 项资产全部与批准的大小及服务器 SHA256 一致。公开仓库、发布页和 latest 页面不登录访问均为 HTTP 200；Windows、Mac 安装器及 HTML 手册均通过不登录的有界下载和文件格式检查。
+[公开 GitHub 仓库](https://github.com/railgun0325/peace-atlas)及[最终下载入口](https://github.com/railgun0325/peace-atlas/releases/latest)可不登录访问；公开意味着没有链接的人也可能通过搜索找到，不能当作凭链接的保密分享。正式数据库、API Key、登录会话、本机 QA 与原帖材料不上传。固定发布标签为 `v2.0.0-binary-account-types.20261012`；本轮已正式发布，latest 下载入口已指向本轮版本，发布标题现为 `PEACE ATLAS 2.0.0`，下载列表仅保留 Windows EXE 和 Mac PKG 两个安装器，原有安装器字节与 SHA256 不变；其余 10 个辅助附件已移除，说明书改为仓库文档入口。历史 12 项资产以及 HTML 手册的下载验收结果仍保留为当时的记录。公开仓库、发布页和 latest 页面可不登录访问，两个保留安装器此前的不登录有界下载与格式检查通过。
 
 ## 瘦身与停止边界
 
